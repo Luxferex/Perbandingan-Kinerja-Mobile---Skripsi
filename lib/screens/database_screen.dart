@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/benchmark_result.dart';
-import '../providers/benchmark_summary_provider.dart';
 import '../providers/database_provider.dart';
+import '../utils/benchmark_utils.dart';
+import '../utils/clipboard_helper.dart';
 
 class DatabaseScreen extends StatelessWidget {
   const DatabaseScreen({super.key});
-
-  String _formatMs(double ms) => ms.toStringAsFixed(2);
 
   String _operationLabel(String operation) {
     switch (operation) {
@@ -27,41 +25,30 @@ class DatabaseScreen extends StatelessWidget {
     }
   }
 
-  void _showErrorSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
+  Future<void> _resetDatabase(BuildContext context) async {
+    final provider = context.read<DatabaseProvider>();
 
-  Future<void> _runBenchmark(BuildContext context) async {
-    final databaseProvider = context.read<DatabaseProvider>();
-    final previousRunCount = databaseProvider.runCount;
+    try {
+      await provider.resetDatabase();
 
-    await databaseProvider.runFullBenchmark();
+      if (!context.mounted) return;
 
-    if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Database berhasil direset')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
 
-    if (databaseProvider.error != null) {
-      _showErrorSnackBar(context, databaseProvider.error!);
-      return;
-    }
-
-    if (databaseProvider.runCount > previousRunCount) {
-      context.read<BenchmarkSummaryProvider>().addResult(
-            BenchmarkResult(
-              scenario: 'sqlite',
-              executionTimeMs: databaseProvider.totalTimeMs,
-            ),
-          );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal reset database: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Skenario Basis Data SQLite'),
-      ),
+      appBar: AppBar(title: const Text('Skenario Basis Data SQLite')),
       body: Consumer<DatabaseProvider>(
         builder: (context, provider, _) {
           final showResults = provider.runCount > 0 && !provider.isLoading;
@@ -88,29 +75,29 @@ class DatabaseScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'INSERT: ${_formatMs(provider.insertTimeMs)} ms',
-                          ),
+                          Text('INSERT: ${formatMs(provider.insertTimeMs)}'),
                           const SizedBox(height: 4),
                           Text(
-                            'SELECT: ${_formatMs(provider.selectTimeMs)} ms '
+                            'SELECT: ${formatMs(provider.selectTimeMs)} '
                             '(${provider.selectedCount} records)',
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            'UPDATE: ${_formatMs(provider.updateTimeMs)} ms',
-                          ),
+                          Text('UPDATE: ${formatMs(provider.updateTimeMs)}'),
                           const SizedBox(height: 4),
-                          Text(
-                            'DELETE: ${_formatMs(provider.deleteTimeMs)} ms',
-                          ),
+                          Text('DELETE: ${formatMs(provider.deleteTimeMs)}'),
                           const Divider(),
                           Text(
-                            'TOTAL: ${_formatMs(provider.totalTimeMs)} ms',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
+                            'TOTAL: ${formatMs(provider.totalTimeMs)}',
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => copyBenchmarkResult(
+                              context,
+                              text: provider.lastResultCopyText,
+                            ),
+                            child: const Text('Salin hasil ke clipboard'),
                           ),
                         ],
                       ),
@@ -131,13 +118,20 @@ class DatabaseScreen extends StatelessWidget {
                 FilledButton(
                   onPressed: provider.isLoading
                       ? null
-                      : () => _runBenchmark(context),
+                      : provider.runFullBenchmark,
                   child: const Text('Jalankan Benchmark'),
                 ),
                 if (provider.isLoading) ...[
                   const SizedBox(height: 12),
                   const LinearProgressIndicator(),
                 ],
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: provider.isLoading
+                      ? null
+                      : () => _resetDatabase(context),
+                  child: const Text('Reset Database'),
+                ),
               ],
             ),
           );

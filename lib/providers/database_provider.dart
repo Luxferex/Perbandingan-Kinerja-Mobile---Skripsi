@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 
-import '../models/post_model.dart';
+import '../models/benchmark_result.dart';
 import '../services/database_service.dart';
+import '../utils/benchmark_utils.dart';
 
 class DatabaseProvider extends ChangeNotifier {
   static const int _benchmarkItemCount = 1000;
 
   final DatabaseService _databaseService;
+  final void Function(BenchmarkResult)? onResultRecorded;
 
   bool _isLoading = false;
   String _currentOperation = 'idle';
@@ -18,9 +20,12 @@ class DatabaseProvider extends ChangeNotifier {
   int _selectedCount = 0;
   String? _error;
   int _runCount = 0;
+  final List<BenchmarkResult> _results = [];
 
-  DatabaseProvider({DatabaseService? databaseService})
-      : _databaseService = databaseService ?? DatabaseService();
+  DatabaseProvider({
+    DatabaseService? databaseService,
+    this.onResultRecorded,
+  }) : _databaseService = databaseService ?? DatabaseService();
 
   bool get isLoading => _isLoading;
   String get currentOperation => _currentOperation;
@@ -32,17 +37,29 @@ class DatabaseProvider extends ChangeNotifier {
   int get selectedCount => _selectedCount;
   String? get error => _error;
   int get runCount => _runCount;
+  List<BenchmarkResult> get results => List.unmodifiable(_results);
 
-  List<PostModel> _generateDummyPosts(int count) {
-    return List.generate(count, (index) {
-      final id = index + 1;
-      return PostModel(
-        id: id,
-        userId: 1,
-        title: 'Item $id',
-        body: 'Body text for item $id',
-      );
-    });
+  String? get lastResultCopyText {
+    if (_results.isEmpty) return null;
+    final last = _results.last;
+    return formatResultLogLine(
+      scenarioLabel: 'SQLite',
+      runNumber: _runCount,
+      executionTimeMs: last.executionTimeMs,
+      timestamp: last.timestamp,
+    );
+  }
+
+  void _recordResult(BenchmarkResult result) {
+    _results.add(result);
+    onResultRecorded?.call(result);
+  }
+
+  Future<double> _runTimedOperation(Future<void> Function() operation) async {
+    final startTime = DateTime.now().microsecondsSinceEpoch;
+    await operation();
+    final endTime = DateTime.now().microsecondsSinceEpoch;
+    return elapsedMs(startTime, endTime);
   }
 
   Future<void> runFullBenchmark() async {
@@ -64,50 +81,67 @@ class DatabaseProvider extends ChangeNotifier {
       notifyListeners();
       await _databaseService.clearAll();
 
-      final dummyPosts = _generateDummyPosts(_benchmarkItemCount);
+      final dummyPosts = generateDummyPosts(_benchmarkItemCount);
 
       _currentOperation = 'inserting';
       notifyListeners();
-      final insertStopwatch = Stopwatch()..start();
-      await _databaseService.insertBatch(dummyPosts);
-      insertStopwatch.stop();
-      _insertTimeMs = insertStopwatch.elapsedMicroseconds / 1000;
+      _insertTimeMs = await _runTimedOperation(
+        () => _databaseService.insertBatch(dummyPosts),
+      );
       notifyListeners();
 
       _currentOperation = 'selecting';
       notifyListeners();
-      final selectStopwatch = Stopwatch()..start();
+      final selectStart = DateTime.now().microsecondsSinceEpoch;
       final selected = await _databaseService.selectAll();
-      selectStopwatch.stop();
-      _selectTimeMs = selectStopwatch.elapsedMicroseconds / 1000;
+      final selectEnd = DateTime.now().microsecondsSinceEpoch;
+      _selectTimeMs = elapsedMs(selectStart, selectEnd);
       _selectedCount = selected.length;
       notifyListeners();
 
       _currentOperation = 'updating';
       notifyListeners();
-      final updateStopwatch = Stopwatch()..start();
-      await _databaseService.updateHalf();
-      updateStopwatch.stop();
-      _updateTimeMs = updateStopwatch.elapsedMicroseconds / 1000;
+      _updateTimeMs = await _runTimedOperation(
+        () async => _databaseService.updateHalf(),
+      );
       notifyListeners();
 
       _currentOperation = 'deleting';
       notifyListeners();
-      final deleteStopwatch = Stopwatch()..start();
-      await _databaseService.deleteHalf();
-      deleteStopwatch.stop();
-      _deleteTimeMs = deleteStopwatch.elapsedMicroseconds / 1000;
+      _deleteTimeMs = await _runTimedOperation(
+        () async => _databaseService.deleteHalf(),
+      );
 
       _totalTimeMs =
           _insertTimeMs + _selectTimeMs + _updateTimeMs + _deleteTimeMs;
       _runCount++;
       _currentOperation = 'idle';
+
+      _recordResult(
+        BenchmarkResult(
+          scenario: 'sqlite',
+          executionTimeMs: _totalTimeMs,
+          timestamp: DateTime.now(),
+        ),
+      );
     } catch (e) {
       _error = e.toString();
       _currentOperation = 'idle';
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> resetDatabase() async {
+    try {
+      await _databaseService.initDatabase();
+      await _databaseService.clearAll();
+      reset();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
     }
   }
 
@@ -122,6 +156,7 @@ class DatabaseProvider extends ChangeNotifier {
     _selectedCount = 0;
     _error = null;
     _runCount = 0;
+    _results.clear();
     notifyListeners();
   }
 }

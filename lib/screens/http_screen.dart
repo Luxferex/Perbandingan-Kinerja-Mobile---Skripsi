@@ -1,43 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/benchmark_result.dart';
-import '../providers/benchmark_summary_provider.dart';
 import '../providers/http_provider.dart';
+import '../utils/benchmark_utils.dart';
+import '../utils/clipboard_helper.dart';
 
 class HttpScreen extends StatelessWidget {
   const HttpScreen({super.key});
-
-  String _formatMs(double ms) => ms.toStringAsFixed(2);
-
-  void _showErrorSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  Future<void> _runBenchmark(BuildContext context) async {
-    final httpProvider = context.read<HttpProvider>();
-    final previousRunCount = httpProvider.runCount;
-
-    await httpProvider.fetchAndMeasure();
-
-    if (!context.mounted) return;
-
-    if (httpProvider.error != null) {
-      _showErrorSnackBar(context, httpProvider.error!);
-      return;
-    }
-
-    if (httpProvider.runCount > previousRunCount) {
-      context.read<BenchmarkSummaryProvider>().addResult(
-            BenchmarkResult(
-              scenario: 'http',
-              executionTimeMs: httpProvider.executionTimeMs,
-            ),
-          );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,9 +16,8 @@ class HttpScreen extends StatelessWidget {
       ),
       body: Consumer<HttpProvider>(
         builder: (context, provider, _) {
-          final executionMs = provider.runCount > 0
-              ? provider.executionTimeMs
-              : 0.0;
+          final executionMs =
+              provider.runCount > 0 ? provider.executionTimeMs : 0.0;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -73,7 +41,7 @@ class HttpScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Waktu Eksekusi: ${_formatMs(executionMs)} ms',
+                          'Waktu Eksekusi: ${formatMs(executionMs)}',
                         ),
                         const SizedBox(height: 4),
                         Text('Jumlah run: ${provider.runCount}'),
@@ -86,6 +54,16 @@ class HttpScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (provider.runCount > 0) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => copyBenchmarkResult(
+                              context,
+                              text: provider.lastResultCopyText,
+                            ),
+                            child: const Text('Salin hasil ke clipboard'),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -94,7 +72,7 @@ class HttpScreen extends StatelessWidget {
                 FilledButton(
                   onPressed: provider.isLoading
                       ? null
-                      : () => _runBenchmark(context),
+                      : provider.fetchAndMeasure,
                   child: const Text('Jalankan'),
                 ),
                 if (provider.isLoading) ...[

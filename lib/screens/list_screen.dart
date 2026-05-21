@@ -1,30 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/benchmark_result.dart';
-import '../providers/benchmark_summary_provider.dart';
 import '../providers/list_provider.dart';
+import '../utils/benchmark_utils.dart';
+import '../utils/clipboard_helper.dart';
 
 class ListScreen extends StatelessWidget {
   const ListScreen({super.key});
-
-  String _formatMs(double ms) => ms.toStringAsFixed(2);
-
-  Future<void> _runBenchmark(BuildContext context) async {
-    final listProvider = context.read<ListProvider>();
-    await listProvider.generateAndMeasure();
-
-    if (!context.mounted) return;
-
-    if (listProvider.isGenerated) {
-      context.read<BenchmarkSummaryProvider>().addResult(
-            BenchmarkResult(
-              scenario: 'rendering',
-              executionTimeMs: listProvider.executionTimeMs,
-            ),
-          );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,14 +37,31 @@ class ListScreen extends StatelessWidget {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Waktu Generate: ${_formatMs(generateMs)} ms',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Waktu Generate: ${formatMs(generateMs)}',
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Jumlah run: ${provider.runCount}'),
+                        if (provider.runCount > 0) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => copyBenchmarkResult(
+                              context,
+                              text: provider.lastResultCopyText,
+                            ),
+                            child: const Text('Salin hasil ke clipboard'),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: () => _runBenchmark(context),
+                  onPressed: provider.generateAndMeasure,
                   child: const Text('Generate & Render'),
                 ),
                 const SizedBox(height: 12),
