@@ -25,6 +25,17 @@ double elapsedMs(int startMicroseconds, int endMicroseconds) {
   return (endMicroseconds - startMicroseconds) / 1000.0;
 }
 
+/// Format timestamp untuk export CSV (Python/Excel).
+String formatCsvTimestamp(DateTime dt) {
+  final y = dt.year.toString().padLeft(4, '0');
+  final m = dt.month.toString().padLeft(2, '0');
+  final d = dt.day.toString().padLeft(2, '0');
+  final h = dt.hour.toString().padLeft(2, '0');
+  final min = dt.minute.toString().padLeft(2, '0');
+  final sec = dt.second.toString().padLeft(2, '0');
+  return '$y-$m-$d $h:$min:$sec';
+}
+
 /// Format baris hasil untuk clipboard.
 String formatResultLogLine({
   required String scenarioLabel,

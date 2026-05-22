@@ -20,6 +20,7 @@ class DatabaseProvider extends ChangeNotifier {
   int _selectedCount = 0;
   String? _error;
   int _runCount = 0;
+  bool _isDatabaseInitialized = false;
   final List<BenchmarkResult> _results = [];
 
   DatabaseProvider({
@@ -38,6 +39,7 @@ class DatabaseProvider extends ChangeNotifier {
   String? get error => _error;
   int get runCount => _runCount;
   List<BenchmarkResult> get results => List.unmodifiable(_results);
+  bool get isDatabaseInitialized => _isDatabaseInitialized;
 
   String? get lastResultCopyText {
     if (_results.isEmpty) return null;
@@ -53,6 +55,30 @@ class DatabaseProvider extends ChangeNotifier {
   void _recordResult(BenchmarkResult result) {
     _results.add(result);
     onResultRecorded?.call(result);
+  }
+
+  Future<bool> ensureDatabaseReady() async {
+    try {
+      await _databaseService.initDatabase();
+      _isDatabaseInitialized = true;
+      _error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isDatabaseInitialized = false;
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> runMultiple(int count) async {
+    for (var i = 0; i < count; i++) {
+      await runFullBenchmark();
+      if (i < count - 1) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
   }
 
   Future<double> _runTimedOperation(Future<void> Function() operation) async {
@@ -76,6 +102,7 @@ class DatabaseProvider extends ChangeNotifier {
 
     try {
       await _databaseService.initDatabase();
+      _isDatabaseInitialized = true;
 
       _currentOperation = 'clearing';
       notifyListeners();
@@ -136,6 +163,7 @@ class DatabaseProvider extends ChangeNotifier {
   Future<void> resetDatabase() async {
     try {
       await _databaseService.initDatabase();
+      _isDatabaseInitialized = true;
       await _databaseService.clearAll();
       reset();
     } catch (e) {
@@ -156,6 +184,7 @@ class DatabaseProvider extends ChangeNotifier {
     _selectedCount = 0;
     _error = null;
     _runCount = 0;
+    _isDatabaseInitialized = false;
     _results.clear();
     notifyListeners();
   }

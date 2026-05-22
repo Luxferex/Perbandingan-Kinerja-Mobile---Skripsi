@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/benchmark_settings_provider.dart';
 import '../providers/database_provider.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
 
-class DatabaseScreen extends StatelessWidget {
+class DatabaseScreen extends StatefulWidget {
   const DatabaseScreen({super.key});
+
+  @override
+  State<DatabaseScreen> createState() => _DatabaseScreenState();
+}
+
+class _DatabaseScreenState extends State<DatabaseScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DatabaseProvider>().ensureDatabaseReady();
+    });
+  }
 
   String _operationLabel(String operation) {
     switch (operation) {
@@ -39,19 +53,84 @@ class DatabaseScreen extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal reset database: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal reset database: $e')),
+      );
+    }
+  }
+
+  Future<bool> _confirmBenchmark(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Pengujian'),
+          content: const Text(
+            'Pengujian akan menjalankan 4 operasi berurutan. '
+            'Pastikan tidak ada interupsi. Lanjutkan?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Lanjutkan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<void> _runBenchmark(BuildContext context) async {
+    final provider = context.read<DatabaseProvider>();
+
+    if (!provider.isDatabaseInitialized) {
+      final ready = await provider.ensureDatabaseReady();
+      if (!ready) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              provider.error ?? 'Database belum siap. Inisialisasi gagal.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+
+    final confirmed = await _confirmBenchmark(context);
+    if (!confirmed || !context.mounted) return;
+
+    final settings = context.read<BenchmarkSettingsProvider>();
+    await provider.runMultiple(settings.sqliteTargetRuns);
+
+    if (!context.mounted) return;
+
+    if (provider.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(provider.error!)),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Skenario Basis Data SQLite')),
-      body: Consumer<DatabaseProvider>(
-        builder: (context, provider, _) {
+      appBar: AppBar(
+        title: const Text('Skenario Basis Data SQLite'),
+      ),
+      body: Consumer2<DatabaseProvider, BenchmarkSettingsProvider>(
+        builder: (context, provider, settings, _) {
           final showResults = provider.runCount > 0 && !provider.isLoading;
+          final targetRuns = settings.sqliteTargetRuns;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -75,6 +154,8 @@ class DatabaseScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('Target repetisi: $targetRuns'),
+                          const SizedBox(height: 4),
                           Text('INSERT: ${formatMs(provider.insertTimeMs)}'),
                           const SizedBox(height: 4),
                           Text(
@@ -88,7 +169,9 @@ class DatabaseScreen extends StatelessWidget {
                           const Divider(),
                           Text(
                             'TOTAL: ${formatMs(provider.totalTimeMs)}',
-                            style: Theme.of(context).textTheme.titleMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
@@ -104,7 +187,11 @@ class DatabaseScreen extends StatelessWidget {
                     ),
                   ),
                 if (showResults) const SizedBox(height: 12),
-                Text(_operationLabel(provider.currentOperation)),
+                Text(
+                  provider.isDatabaseInitialized
+                      ? _operationLabel(provider.currentOperation)
+                      : 'Menginisialisasi database...',
+                ),
                 if (provider.error != null) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -118,8 +205,8 @@ class DatabaseScreen extends StatelessWidget {
                 FilledButton(
                   onPressed: provider.isLoading
                       ? null
-                      : provider.runFullBenchmark,
-                  child: const Text('Jalankan Benchmark'),
+                      : () => _runBenchmark(context),
+                  child: Text('Jalankan Benchmark ($targetRuns x)'),
                 ),
                 if (provider.isLoading) ...[
                   const SizedBox(height: 12),

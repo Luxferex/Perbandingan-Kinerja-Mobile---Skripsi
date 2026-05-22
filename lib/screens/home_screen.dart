@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/repetition_setting_row.dart';
 import 'database_screen.dart';
 import 'http_screen.dart';
 import 'list_screen.dart';
+import 'pre_test_screen.dart';
 import 'summary_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -18,6 +20,50 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Jumlah Repetisi',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    const RepetitionSettingRow(
+                      scenario: 'http',
+                      label: 'Repetisi HTTP',
+                    ),
+                    const RepetitionSettingRow(
+                      scenario: 'rendering',
+                      label: 'Repetisi Rendering',
+                    ),
+                    const RepetitionSettingRow(
+                      scenario: 'sqlite',
+                      label: 'Repetisi SQLite',
+                    ),
+                    Text(
+                      'Minimum 5, maksimum 100 per skenario',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PreTestScreen(),
+                  ),
+                );
+              },
+              child: const Text('Persiapan Pengujian'),
+            ),
+            const SizedBox(height: 12),
             _ScenarioCard(
               icon: Icons.wifi,
               title: 'HTTP Request',

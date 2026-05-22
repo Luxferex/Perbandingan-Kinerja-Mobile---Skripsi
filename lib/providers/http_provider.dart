@@ -15,6 +15,7 @@ class HttpProvider extends ChangeNotifier {
   int _runCount = 0;
   String? _error;
   final List<BenchmarkResult> _results = [];
+  bool _isWarmedUp = false;
 
   HttpProvider({
     HttpService? httpService,
@@ -27,6 +28,7 @@ class HttpProvider extends ChangeNotifier {
   int get runCount => _runCount;
   String? get error => _error;
   List<BenchmarkResult> get results => List.unmodifiable(_results);
+  bool get isWarmedUp => _isWarmedUp;
 
   String? get lastResultCopyText {
     if (_results.isEmpty) return null;
@@ -42,6 +44,23 @@ class HttpProvider extends ChangeNotifier {
   void _recordResult(BenchmarkResult result) {
     _results.add(result);
     onResultRecorded?.call(result);
+  }
+
+  Future<void> warmUp() async {
+    if (_isWarmedUp) return;
+    try {
+      await _httpService.fetchPosts();
+      _isWarmedUp = true;
+    } catch (_) {}
+  }
+
+  Future<void> runMultiple(int count) async {
+    for (var i = 0; i < count; i++) {
+      await fetchAndMeasure();
+      if (i < count - 1) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
   }
 
   Future<void> fetchAndMeasure() async {

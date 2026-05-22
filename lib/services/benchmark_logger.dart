@@ -1,4 +1,5 @@
 import '../models/benchmark_result.dart';
+import '../utils/benchmark_utils.dart';
 
 class BenchmarkLogger {
   final List<BenchmarkResult> _results = [];
@@ -18,13 +19,17 @@ class BenchmarkLogger {
   }
 
   String exportAsCsv() {
-    final buffer = StringBuffer('scenario,executionTimeMs,timestamp\n');
+    final buffer = StringBuffer(
+      'run,scenario,execution_time_ms,timestamp\n',
+    );
 
-    for (final result in _results) {
+    for (var i = 0; i < _results.length; i++) {
+      final result = _results[i];
       buffer.writeln(
+        '${i + 1},'
         '${result.scenario},'
-        '${result.executionTimeMs},'
-        '${result.timestamp.toIso8601String()}',
+        '${result.executionTimeMs.toStringAsFixed(2)},'
+        '${formatCsvTimestamp(result.timestamp)}',
       );
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/benchmark_settings_provider.dart';
 import '../providers/list_provider.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
@@ -8,16 +9,23 @@ import '../utils/clipboard_helper.dart';
 class ListScreen extends StatelessWidget {
   const ListScreen({super.key});
 
+  Future<void> _runBenchmark(BuildContext context) async {
+    final settings = context.read<BenchmarkSettingsProvider>();
+    final provider = context.read<ListProvider>();
+    await provider.runMultiple(settings.renderingTargetRuns);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Skenario Rendering Daftar'),
       ),
-      body: Consumer<ListProvider>(
-        builder: (context, provider, _) {
+      body: Consumer2<ListProvider, BenchmarkSettingsProvider>(
+        builder: (context, provider, settings, _) {
           final generateMs =
               provider.isGenerated ? provider.executionTimeMs : 0.0;
+          final targetRuns = settings.renderingTargetRuns;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -40,6 +48,8 @@ class ListScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text('Target repetisi: $targetRuns'),
+                        const SizedBox(height: 4),
                         Text(
                           'Waktu Generate: ${formatMs(generateMs)}',
                         ),
@@ -61,9 +71,15 @@ class ListScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: provider.generateAndMeasure,
-                  child: const Text('Generate & Render'),
+                  onPressed: provider.isLoading
+                      ? null
+                      : () => _runBenchmark(context),
+                  child: Text('Generate & Render ($targetRuns x)'),
                 ),
+                if (provider.isLoading) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(),
+                ],
                 const SizedBox(height: 12),
                 Expanded(
                   child: ListView.builder(

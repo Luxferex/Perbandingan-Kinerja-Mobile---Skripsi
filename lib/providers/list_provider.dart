@@ -9,6 +9,7 @@ class ListProvider extends ChangeNotifier {
 
   List<PostModel> _items = [];
   bool _isGenerated = false;
+  bool _isLoading = false;
   double _executionTimeMs = 0;
   int _runCount = 0;
   final int _itemCount = 1000;
@@ -18,6 +19,7 @@ class ListProvider extends ChangeNotifier {
 
   List<PostModel> get items => List.unmodifiable(_items);
   bool get isGenerated => _isGenerated;
+  bool get isLoading => _isLoading;
   double get executionTimeMs => _executionTimeMs;
   int get runCount => _runCount;
   int get itemCount => _itemCount;
@@ -37,6 +39,23 @@ class ListProvider extends ChangeNotifier {
   void _recordResult(BenchmarkResult result) {
     _results.add(result);
     onResultRecorded?.call(result);
+  }
+
+  Future<void> runMultiple(int count) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      for (var i = 0; i < count; i++) {
+        await generateAndMeasure();
+        if (i < count - 1) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> generateAndMeasure() async {
@@ -63,6 +82,7 @@ class ListProvider extends ChangeNotifier {
   void reset() {
     _items = [];
     _isGenerated = false;
+    _isLoading = false;
     _executionTimeMs = 0;
     _runCount = 0;
     _results.clear();

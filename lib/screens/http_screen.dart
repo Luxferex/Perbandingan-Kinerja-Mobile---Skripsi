@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/benchmark_settings_provider.dart';
 import '../providers/http_provider.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
 
-class HttpScreen extends StatelessWidget {
+class HttpScreen extends StatefulWidget {
   const HttpScreen({super.key});
+
+  @override
+  State<HttpScreen> createState() => _HttpScreenState();
+}
+
+class _HttpScreenState extends State<HttpScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HttpProvider>().warmUp();
+    });
+  }
+
+  Future<void> _runBenchmark(BuildContext context) async {
+    final settings = context.read<BenchmarkSettingsProvider>();
+    final provider = context.read<HttpProvider>();
+    await provider.runMultiple(settings.httpTargetRuns);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,10 +34,11 @@ class HttpScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Skenario HTTP Request'),
       ),
-      body: Consumer<HttpProvider>(
-        builder: (context, provider, _) {
+      body: Consumer2<HttpProvider, BenchmarkSettingsProvider>(
+        builder: (context, provider, settings, _) {
           final executionMs =
               provider.runCount > 0 ? provider.executionTimeMs : 0.0;
+          final targetRuns = settings.httpTargetRuns;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -40,6 +61,8 @@ class HttpScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text('Target repetisi: $targetRuns'),
+                        const SizedBox(height: 4),
                         Text(
                           'Waktu Eksekusi: ${formatMs(executionMs)}',
                         ),
@@ -72,8 +95,8 @@ class HttpScreen extends StatelessWidget {
                 FilledButton(
                   onPressed: provider.isLoading
                       ? null
-                      : provider.fetchAndMeasure,
-                  child: const Text('Jalankan'),
+                      : () => _runBenchmark(context),
+                  child: Text('Jalankan ($targetRuns x)'),
                 ),
                 if (provider.isLoading) ...[
                   const SizedBox(height: 12),
