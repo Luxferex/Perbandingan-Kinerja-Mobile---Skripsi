@@ -44,7 +44,7 @@ class HomeScreen extends StatelessWidget {
                       label: 'Repetisi SQLite',
                     ),
                     Text(
-                      'Minimum 5, maksimum 100 per skenario',
+                      'Ketuk angka untuk mengetik langsung. Minimum 5, maksimum 100.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

@@ -49,9 +49,19 @@ class HttpProvider extends ChangeNotifier {
   Future<void> warmUp() async {
     if (_isWarmedUp) return;
     try {
+      if (kDebugMode) {
+        debugPrint('[HttpProvider] Warm-up request...');
+      }
       await _httpService.fetchPosts();
       _isWarmedUp = true;
-    } catch (_) {}
+      if (kDebugMode) {
+        debugPrint('[HttpProvider] Warm-up selesai');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[HttpProvider] Warm-up gagal: $e');
+      }
+    }
   }
 
   Future<void> runMultiple(int count) async {
@@ -86,6 +96,9 @@ class HttpProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       _posts = [];
+      if (kDebugMode) {
+        debugPrint('[HttpProvider] Benchmark gagal: $e');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

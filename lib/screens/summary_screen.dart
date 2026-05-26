@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/benchmark_summary_provider.dart';
+import '../utils/csv_export_helper.dart';
 
 class SummaryScreen extends StatelessWidget {
   const SummaryScreen({super.key});
@@ -19,7 +21,7 @@ class SummaryScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Export CSV'),
+          title: const Text('Pratinjau CSV'),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -31,10 +33,52 @@ class SummaryScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Tutup'),
             ),
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: csv));
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('CSV disalin ke clipboard')),
+                  );
+                }
+              },
+              child: const Text('Salin'),
+            ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _saveCsvToDevice(BuildContext context, String csv) async {
+    try {
+      final filePath = await saveCsvToDevice(csv);
+      if (!context.mounted) return;
+      showCsvSavedSnackBar(context, filePath);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan CSV: $e')),
+      );
+    }
+  }
+
+  Future<void> _shareCsv(BuildContext context, String csv) async {
+    try {
+      final filePath = await exportCsvToFile(csv);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('File siap dibagikan:\n$filePath'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal membagikan CSV: $e')),
+      );
+    }
   }
 
   @override
@@ -50,6 +94,8 @@ class SummaryScreen extends StatelessWidget {
               child: Text('Belum ada data pengujian'),
             );
           }
+
+          final csv = provider.getCsvExport();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -117,22 +163,39 @@ class SummaryScreen extends StatelessWidget {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: FilledButton(
-                      onPressed: () {
-                        _showExportDialog(
-                          context,
-                          provider.getCsvExport(),
-                        );
-                      },
-                      child: const Text('Export CSV'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => _saveCsvToDevice(context, csv),
+                          icon: const Icon(Icons.save_alt),
+                          label: const Text('Simpan CSV ke Perangkat'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _shareCsv(context, csv),
+                          icon: const Icon(Icons.share),
+                          label: const Text('Bagikan CSV'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _showExportDialog(context, csv),
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('Pratinjau CSV'),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'File CSV disimpan di folder Downloads (atau dokumen aplikasi). '
+                          'Salin ke PC via USB atau Google Drive untuk uji normalitas di Python.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
-                  onPressed: () {
-                    provider.clearAll();
-                  },
+                  onPressed: provider.clearAll,
                   child: const Text('Hapus Semua Data'),
                 ),
               ],

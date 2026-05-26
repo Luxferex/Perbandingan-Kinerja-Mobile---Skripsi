@@ -48,6 +48,10 @@ class BenchmarkSettingsProvider extends ChangeNotifier {
     _setTargetRuns(key, current - 1);
   }
 
+  void setTargetRuns(String scenario, int value) {
+    _setTargetRuns(scenario, value.clamp(minRuns, maxRuns));
+  }
+
   void _setTargetRuns(String scenario, int value) {
     switch (scenario) {
       case 'http':
