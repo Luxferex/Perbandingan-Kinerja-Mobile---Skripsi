@@ -1,10 +1,5 @@
 package com.benchmark.androidnative.database
-
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room.*
 
 @Dao
 interface PostDao {
@@ -19,11 +14,11 @@ interface PostDao {
     suspend fun updatePost(post: PostEntity)
 
     @Query("DELETE FROM posts WHERE id = :id")
-    suspend fun deletePostById(id: Int)
+    fun deletePostById(id: Int)        // ← hapus suspend
 
     @Query("DELETE FROM posts")
-    suspend fun deleteAll()
+    fun deleteAll()                    // ← hapus suspend
 
     @Query("SELECT COUNT(*) FROM posts")
-    suspend fun getPostCount(): Int
+    fun getPostCount(): Int            // ← hapus suspend
 }

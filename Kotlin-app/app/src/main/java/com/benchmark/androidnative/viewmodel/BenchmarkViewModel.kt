@@ -24,6 +24,7 @@ class BenchmarkViewModel(
     val sqliteResults = MutableLiveData<List<BenchmarkResult>>(emptyList())
     val isLoading = MutableLiveData(false)
     val statusMessage = MutableLiveData("Siap menjalankan benchmark")
+    val exportPathEvent = MutableLiveData<String>()
 
     fun runHttpBenchmark() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -54,9 +55,9 @@ class BenchmarkViewModel(
                     )
                     results.add(result)
                     logger.addResult(result)
+                    httpResults.postValue(results.toList())
                 }
 
-                httpResults.postValue(results.toList())
                 statusMessage.postValue("HTTP benchmark selesai (50 run)")
             } catch (e: Exception) {
                 statusMessage.postValue("HTTP benchmark gagal: ${e.message}")
@@ -101,9 +102,9 @@ class BenchmarkViewModel(
                     )
                     results.add(result)
                     logger.addResult(result)
+                    sqliteResults.postValue(results.toList())
                 }
 
-                sqliteResults.postValue(results.toList())
                 statusMessage.postValue("SQLite benchmark selesai (30 run)")
             } catch (e: Exception) {
                 statusMessage.postValue("SQLite benchmark gagal: ${e.message}")
@@ -119,9 +120,27 @@ class BenchmarkViewModel(
         )
     }
 
+    fun recordRenderSample(context: Context, second: Int): BenchmarkResult {
+        val result = BenchmarkResult(
+            scenario = "Render",
+            run = second,
+            executionMs = 1000.0,
+            cpuPercent = logger.getCurrentCpuPercent(),
+            memoryMB = logger.getCurrentMemoryMB(context)
+        )
+        logger.addResult(result)
+        return result
+    }
+
+    fun setRenderResults(results: List<BenchmarkResult>) {
+        renderResults.postValue(results)
+        statusMessage.postValue("Render benchmark selesai (${results.size} sampel)")
+    }
+
     fun exportAllResults(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val path = mergeAndExportToCsv(context)
+            exportPathEvent.postValue(path)
             statusMessage.postValue("Hasil diekspor ke: $path")
         }
     }

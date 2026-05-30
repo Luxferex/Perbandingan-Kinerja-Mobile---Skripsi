@@ -1,3 +1,20 @@
 <resources>
     <string name="app_name">AndroidNativeBenchmark</string>
+    <string name="app_title">Benchmark App</string>
+    <string name="http_benchmark">HTTP Benchmark</string>
+    <string name="render_benchmark">Render Benchmark</string>
+    <string name="sqlite_benchmark">SQLite Benchmark</string>
+    <string name="export_csv">Export CSV</string>
+    <string name="status_label">Status terakhir</string>
+    <string name="status_ready">Siap menjalankan benchmark</string>
+    <string name="start_benchmark">Mulai</string>
+    <string name="start_render_benchmark">Mulai Benchmark</string>
+    <string name="http_activity_title">HTTP Benchmark</string>
+    <string name="render_activity_title">Render Benchmark</string>
+    <string name="sqlite_activity_title">SQLite Benchmark</string>
+    <string name="average_format">Rata-rata: %1$.2f ms | CPU %2$.2f%% | Memori %3$.2f MB</string>
+    <string name="render_average_format">Rata-rata CPU: %1$.2f%% | Memori: %2$.2f MB</string>
+    <string name="run_metrics_format">%1$.2f ms | CPU %2$.2f%% | Memori %3$.2f MB</string>
+    <string name="run_label">Run %d</string>
+    <string name="render_progress_format">Mengukur… detik %d/30</string>
 </resources>
