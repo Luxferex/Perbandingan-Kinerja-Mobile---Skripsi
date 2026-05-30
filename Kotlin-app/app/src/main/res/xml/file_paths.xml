@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path
+        name="benchmark_exports"
+        path="." />
+    <external-files-path
+        name="benchmark_documents"
+        path="Documents/" />
+    <files-path
+        name="internal_exports"
+        path="." />
+</paths>

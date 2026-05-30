@@ -3,6 +3,7 @@ package com.benchmark.androidnative.util
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Process
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.RandomAccessFile
 import java.text.SimpleDateFormat
@@ -76,7 +77,13 @@ class BenchmarkLogger {
             }
         }
 
-        return file.absolutePath
+        val authority = "${context.packageName}.fileprovider"
+        val contentUri = FileProvider.getUriForFile(
+            context,
+            authority,
+            file
+        )
+        return contentUri.toString()
     }
 
     private fun readCpuTimes(): Pair<Long, Long> {
