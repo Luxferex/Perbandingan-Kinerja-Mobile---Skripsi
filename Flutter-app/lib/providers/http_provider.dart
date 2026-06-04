@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/benchmark_result.dart';
 import '../models/post_model.dart';
+import '../services/cpu_service.dart';
 import '../services/http_service.dart';
 import '../utils/benchmark_utils.dart';
 
@@ -78,18 +81,27 @@ class HttpProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    final cpuBefore = await CpuService.getCpuTimeNanos();
     final startTime = DateTime.now().microsecondsSinceEpoch;
 
     try {
       _posts = await _httpService.fetchPosts();
       final endTime = DateTime.now().microsecondsSinceEpoch;
       _executionTimeMs = elapsedMs(startTime, endTime);
+      final cpuAfter = await CpuService.getCpuTimeNanos();
+      final cpuPercent = CpuService.calculateCpuPercent(
+        cpuAfter - cpuBefore,
+        _executionTimeMs,
+      );
+      final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
       _runCount++;
 
       _recordResult(
         BenchmarkResult(
           scenario: 'http',
           executionTimeMs: _executionTimeMs,
+          cpuPercent: cpuPercent,
+          memoryMb: memoryMb,
           timestamp: DateTime.now(),
         ),
       );

@@ -5,6 +5,31 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../models/benchmark_result.dart';
+import 'benchmark_utils.dart';
+
+/// Bangun konten CSV benchmark dengan kolom standar penelitian.
+String buildBenchmarkCsvExport(List<BenchmarkResult> results) {
+  final buffer = StringBuffer(
+    'run,framework,scenario,execution_time_ms,cpu_percent,memory_mb,timestamp\n',
+  );
+
+  for (var i = 0; i < results.length; i++) {
+    final result = results[i];
+    buffer.writeln(
+      '${i + 1},'
+      'flutter,'
+      '${result.scenario},'
+      '${result.executionTimeMs.toStringAsFixed(2)},'
+      '${result.cpuPercent.toStringAsFixed(1)},'
+      '${result.memoryMb.toStringAsFixed(1)},'
+      '${formatCsvTimestamp(result.timestamp)}',
+    );
+  }
+
+  return buffer.toString();
+}
+
 String _buildFileName() {
   final timestamp = DateTime.now();
   return 'benchmark_hasil_${timestamp.year}'

@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/benchmark_result.dart';
+import '../services/cpu_service.dart';
 import '../services/database_service.dart';
 import '../utils/benchmark_utils.dart';
 
@@ -101,6 +104,8 @@ class DatabaseProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final cpuBefore = await CpuService.getCpuTimeNanos();
+
       await _databaseService.initDatabase();
       _isDatabaseInitialized = true;
 
@@ -141,6 +146,12 @@ class DatabaseProvider extends ChangeNotifier {
 
       _totalTimeMs =
           _insertTimeMs + _selectTimeMs + _updateTimeMs + _deleteTimeMs;
+      final cpuAfter = await CpuService.getCpuTimeNanos();
+      final cpuPercent = CpuService.calculateCpuPercent(
+        cpuAfter - cpuBefore,
+        _totalTimeMs,
+      );
+      final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
       _runCount++;
       _currentOperation = 'idle';
 
@@ -148,6 +159,8 @@ class DatabaseProvider extends ChangeNotifier {
         BenchmarkResult(
           scenario: 'sqlite',
           executionTimeMs: _totalTimeMs,
+          cpuPercent: cpuPercent,
+          memoryMb: memoryMb,
           timestamp: DateTime.now(),
         ),
       );

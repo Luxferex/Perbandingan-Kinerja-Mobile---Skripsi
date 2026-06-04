@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/benchmark_result.dart';
-import '../utils/benchmark_utils.dart';
+import '../utils/csv_export_helper.dart';
 
 class BenchmarkSummaryProvider extends ChangeNotifier {
   final List<BenchmarkResult> _allResults = [];
@@ -18,23 +18,7 @@ class BenchmarkSummaryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String getCsvExport() {
-    final buffer = StringBuffer(
-      'run,scenario,execution_time_ms,timestamp\n',
-    );
-
-    for (var i = 0; i < _allResults.length; i++) {
-      final result = _allResults[i];
-      buffer.writeln(
-        '${i + 1},'
-        '${result.scenario},'
-        '${result.executionTimeMs.toStringAsFixed(2)},'
-        '${formatCsvTimestamp(result.timestamp)}',
-      );
-    }
-
-    return buffer.toString();
-  }
+  String getCsvExport() => buildBenchmarkCsvExport(_allResults);
 
   List<BenchmarkResult> _resultsForScenario(String scenario) {
     return _allResults
