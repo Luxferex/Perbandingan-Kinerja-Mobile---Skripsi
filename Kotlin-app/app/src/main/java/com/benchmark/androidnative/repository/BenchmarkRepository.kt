@@ -9,14 +9,18 @@ import kotlinx.coroutines.withContext
 
 class BenchmarkRepository(
     private val database: AppDatabase,
-    private val retrofitClient: RetrofitClient = RetrofitClient
+    private val retrofitClient: RetrofitClient = RetrofitClient,
 ) {
 
     private val postDao = database.postDao()
     private val apiService = retrofitClient.apiService
 
     suspend fun fetchPostsFromApi(): List<PostItem> = withContext(Dispatchers.IO) {
-        apiService.getPosts()
+        apiService.getPosts(limit = 100)
+    }
+
+    suspend fun clearDatabase() = withContext(Dispatchers.IO) {
+        postDao.deleteAll()
     }
 
     suspend fun insertPostsToDb(posts: List<PostEntity>) = withContext(Dispatchers.IO) {
@@ -27,19 +31,11 @@ class BenchmarkRepository(
         postDao.getAllPosts()
     }
 
-    suspend fun updatePosts(posts: List<PostEntity>) = withContext(Dispatchers.IO) {
-        posts.take(500).forEach { post ->
-            postDao.updatePost(post)
-        }
+    suspend fun updateHalf(): Int = withContext(Dispatchers.IO) {
+        postDao.updateHalf()
     }
 
-    suspend fun deletePosts(posts: List<PostEntity>) = withContext(Dispatchers.IO) {
-        posts.take(500).forEach { post ->
-            postDao.deletePostById(post.id)
-        }
-    }
-
-    suspend fun clearDatabase() = withContext(Dispatchers.IO) {
-        postDao.deleteAll()
+    suspend fun deleteHalf(): Int = withContext(Dispatchers.IO) {
+        postDao.deleteHalf()
     }
 }

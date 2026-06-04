@@ -13,18 +13,18 @@ import com.benchmark.androidnative.databinding.ActivityScenarioBinding
 import com.benchmark.androidnative.ui.adapter.PostListAdapter
 import com.benchmark.androidnative.util.BenchmarkUtils
 import com.benchmark.androidnative.viewmodel.BenchmarkViewModel
-import com.benchmark.androidnative.viewmodel.HttpUiState
+import com.benchmark.androidnative.viewmodel.ListUiState
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 
-class HttpActivity : AppCompatActivity() {
+class ListActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityScenarioBinding
     private lateinit var viewModel: BenchmarkViewModel
     private val postAdapter = PostListAdapter()
 
     private lateinit var tvTargetRuns: TextView
-    private lateinit var tvExecutionTime: TextView
+    private lateinit var tvGenerateTime: TextView
     private lateinit var tvRunCount: TextView
     private lateinit var btnCopy: MaterialButton
 
@@ -35,32 +35,30 @@ class HttpActivity : AppCompatActivity() {
 
         viewModel = (application as BenchmarkApplication).benchmarkViewModel
 
-        binding.toolbar.title = getString(R.string.http_screen_title)
+        binding.toolbar.title = getString(R.string.list_screen_title)
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
 
-        binding.tvDescription.text = getString(R.string.http_card_desc)
+        binding.tvDescription.text = getString(R.string.list_card_desc)
         binding.rvList.visibility = View.VISIBLE
         binding.rvList.layoutManager = LinearLayoutManager(this)
         binding.rvList.adapter = postAdapter
 
         setupMetricsViews()
 
-        viewModel.warmUpHttp()
-
-        viewModel.httpTargetRuns.observe(this) { target ->
-            binding.btnRun.text = getString(R.string.run_http, target)
+        viewModel.renderingTargetRuns.observe(this) { target ->
+            binding.btnRun.text = getString(R.string.run_list, target)
             tvTargetRuns.text = getString(R.string.target_runs, target)
         }
 
-        viewModel.httpState.observe(this) { state ->
+        viewModel.listState.observe(this) { state ->
             updateUi(state)
         }
 
         binding.btnRun.setOnClickListener {
-            val count = viewModel.targetRunsFor("http")
-            viewModel.runHttpMultiple(count)
+            val count = viewModel.targetRunsFor("rendering")
+            viewModel.runListMultiple(count)
         }
     }
 
@@ -69,7 +67,7 @@ class HttpActivity : AppCompatActivity() {
         container.removeAllViews()
 
         tvTargetRuns = addMetricLine(container)
-        tvExecutionTime = addMetricLine(container)
+        tvGenerateTime = addMetricLine(container)
         tvRunCount = addMetricLine(container)
 
         btnCopy = MaterialButton(this).apply {
@@ -91,27 +89,24 @@ class HttpActivity : AppCompatActivity() {
         return textView
     }
 
-    private fun updateUi(state: HttpUiState) {
-        val executionMs = if (state.runCount > 0) state.executionTimeMs else 0.0
-        tvExecutionTime.text = getString(
-            R.string.execution_time,
-            BenchmarkUtils.formatMs(executionMs),
+    private fun updateUi(state: ListUiState) {
+        val generateMs = if (state.isGenerated) state.executionTimeMs else 0.0
+        tvGenerateTime.text = getString(
+            R.string.generate_time,
+            BenchmarkUtils.formatMs(generateMs),
         )
         tvRunCount.text = getString(R.string.run_count, state.runCount)
-
-        binding.tvError.visibility = if (state.error != null) View.VISIBLE else View.GONE
-        binding.tvError.text = state.error
 
         binding.btnRun.isEnabled = !state.isLoading
         binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
 
         btnCopy.visibility = if (state.runCount > 0) View.VISIBLE else View.GONE
 
-        postAdapter.submitList(state.posts)
+        postAdapter.submitList(state.items)
     }
 
     private fun copyResult() {
-        val text = viewModel.httpLastResultCopyText() ?: return
+        val text = viewModel.listLastResultCopyText() ?: return
         val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("benchmark", text))
         Snackbar.make(binding.root, R.string.copied_clipboard, Snackbar.LENGTH_SHORT).show()

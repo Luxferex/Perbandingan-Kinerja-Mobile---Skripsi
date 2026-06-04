@@ -1,5 +1,9 @@
 package com.benchmark.androidnative.database
-import androidx.room.*
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 
 @Dao
 interface PostDao {
@@ -7,18 +11,15 @@ interface PostDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(posts: List<PostEntity>)
 
-    @Query("SELECT * FROM posts")
+    @Query("SELECT * FROM posts ORDER BY id ASC")
     suspend fun getAllPosts(): List<PostEntity>
 
-    @Update
-    suspend fun updatePost(post: PostEntity)
+    @Query("UPDATE posts SET title = 'updated_title' WHERE id <= 500")
+    suspend fun updateHalf(): Int
 
-    @Query("DELETE FROM posts WHERE id = :id")
-    fun deletePostById(id: Int)        // ← hapus suspend
+    @Query("DELETE FROM posts WHERE id > 500")
+    suspend fun deleteHalf(): Int
 
     @Query("DELETE FROM posts")
-    fun deleteAll()                    // ← hapus suspend
-
-    @Query("SELECT COUNT(*) FROM posts")
-    fun getPostCount(): Int            // ← hapus suspend
+    suspend fun deleteAll()
 }

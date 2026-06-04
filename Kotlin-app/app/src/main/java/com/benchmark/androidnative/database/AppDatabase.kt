@@ -15,7 +15,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun postDao(): PostDao
 
     companion object {
-        private const val DATABASE_NAME = "benchmark_database"
+        private const val DATABASE_NAME = "benchmark_posts.db"
 
         @Volatile
         private var INSTANCE: AppDatabase? = null

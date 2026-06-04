@@ -26,13 +26,19 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ui.PreTestActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.HttpActivity"
             android:exported="false" />
         <activity
-            android:name=".ui.RenderActivity"
+            android:name=".ui.ListActivity"
             android:exported="false" />
         <activity
             android:name=".ui.SqliteActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.SummaryActivity"
             android:exported="false" />
 
         <provider
