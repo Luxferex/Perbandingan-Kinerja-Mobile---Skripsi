@@ -1,6 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../models/benchmark_result.dart';
 import '../models/post_model.dart';
@@ -68,19 +69,30 @@ class ListProvider extends ChangeNotifier {
 
   Future<void> generateAndMeasure() async {
     final cpuBefore = await CpuService.getCpuTimeNanos();
-    final startTime = DateTime.now().microsecondsSinceEpoch;
 
+    final stopwatch = Stopwatch()..start();
     _items = generateDummyPosts(_itemCount);
 
-    final endTime = DateTime.now().microsecondsSinceEpoch;
-    _executionTimeMs = elapsedMs(startTime, endTime);
+    _isGenerated = true;
+
+    // Trigger rebuild and stop timer only after the next frame is painted.
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      completer.complete();
+    });
+    notifyListeners();
+    await completer.future;
+
+    stopwatch.stop();
+    _executionTimeMs = stopwatch.elapsedMicroseconds / 1000.0;
+
     final cpuAfter = await CpuService.getCpuTimeNanos();
     final cpuPercent = CpuService.calculateCpuPercent(
       cpuAfter - cpuBefore,
       _executionTimeMs,
     );
+
     final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
-    _isGenerated = true;
     _runCount++;
 
     _recordResult(

@@ -16,7 +16,9 @@ class CpuService {
     double cpuTimeDiffNanos,
     double wallTimeMs,
   ) {
-    if (wallTimeMs <= 0) return 0.0;
+    // Guard: jika wallTime terlalu kecil, hasil tidak reliable.
+    if (wallTimeMs < 1.0) return -1.0;
+    if (cpuTimeDiffNanos <= 0) return 0.0;
     final cpuTimeMs = cpuTimeDiffNanos / 1000000.0;
     final percent = (cpuTimeMs / wallTimeMs) * 100.0;
     return percent.clamp(0.0, 100.0);
