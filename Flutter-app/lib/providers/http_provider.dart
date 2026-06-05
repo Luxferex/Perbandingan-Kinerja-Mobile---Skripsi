@@ -16,6 +16,7 @@ class HttpProvider extends ChangeNotifier {
   bool _isLoading = false;
   double _executionTimeMs = 0;
   int _runCount = 0;
+  int _progressRun = 0;
   String? _error;
   final List<BenchmarkResult> _results = [];
   bool _isWarmedUp = false;
@@ -29,6 +30,7 @@ class HttpProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   double get executionTimeMs => _executionTimeMs;
   int get runCount => _runCount;
+  int get progressRun => _progressRun;
   String? get error => _error;
   List<BenchmarkResult> get results => List.unmodifiable(_results);
   bool get isWarmedUp => _isWarmedUp;
@@ -69,11 +71,15 @@ class HttpProvider extends ChangeNotifier {
 
   Future<void> runMultiple(int count) async {
     for (var i = 0; i < count; i++) {
+      _progressRun = i + 1;
+      notifyListeners();
       await fetchAndMeasure();
       if (i < count - 1) {
         await Future.delayed(const Duration(milliseconds: 500));
       }
     }
+    _progressRun = 0;
+    notifyListeners();
   }
 
   Future<void> fetchAndMeasure() async {
@@ -122,6 +128,7 @@ class HttpProvider extends ChangeNotifier {
     _isLoading = false;
     _executionTimeMs = 0;
     _runCount = 0;
+    _progressRun = 0;
     _error = null;
     _results.clear();
     notifyListeners();

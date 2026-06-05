@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/benchmark_settings_provider.dart';
 import '../providers/http_provider.dart';
+import '../utils/benchmark_run_helper.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
 
@@ -25,7 +26,35 @@ class _HttpScreenState extends State<HttpScreen> {
   Future<void> _runBenchmark(BuildContext context) async {
     final settings = context.read<BenchmarkSettingsProvider>();
     final provider = context.read<HttpProvider>();
-    await provider.runMultiple(settings.httpTargetRuns);
+    final targetRuns = settings.httpTargetRuns;
+
+    await provider.runMultiple(targetRuns);
+
+    if (!context.mounted) return;
+
+    await handleBenchmarkFinished(
+      context,
+      scenarioKey: 'http',
+      scenarioTitle: 'HTTP Request',
+      completedRuns: provider.runCount,
+      targetRuns: targetRuns,
+      lastExecutionMs: provider.executionTimeMs,
+      results: provider.results,
+      errorMessage: provider.error,
+      resetProvider: provider.reset,
+      runAgain: () => _runBenchmark(context),
+    );
+  }
+
+  Future<void> _resetRuns(BuildContext context) async {
+    final provider = context.read<HttpProvider>();
+    await resetScenarioRuns(
+      context,
+      scenarioKey: 'http',
+      scenarioTitle: 'HTTP Request',
+      currentRunCount: provider.runCount,
+      resetProvider: provider.reset,
+    );
   }
 
   @override
@@ -33,6 +62,13 @@ class _HttpScreenState extends State<HttpScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Skenario HTTP Request'),
+        actions: [
+          IconButton(
+            tooltip: 'Reset run ke 0',
+            onPressed: () => _resetRuns(context),
+            icon: const Icon(Icons.restart_alt),
+          ),
+        ],
       ),
       body: Consumer2<HttpProvider, BenchmarkSettingsProvider>(
         builder: (context, provider, settings, _) {
@@ -53,6 +89,13 @@ class _HttpScreenState extends State<HttpScreen> {
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                BenchmarkRunProgressCard(
+                  isLoading: provider.isLoading,
+                  progressRun: provider.progressRun,
+                  runCount: provider.runCount,
+                  targetRuns: targetRuns,
                 ),
                 const SizedBox(height: 12),
                 Card(
@@ -98,9 +141,13 @@ class _HttpScreenState extends State<HttpScreen> {
                       : () => _runBenchmark(context),
                   child: Text('Jalankan ($targetRuns x)'),
                 ),
-                if (provider.isLoading) ...[
-                  const SizedBox(height: 12),
-                  const LinearProgressIndicator(),
+                if (provider.runCount > 0 && !provider.isLoading) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _resetRuns(context),
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset Run ke 0'),
+                  ),
                 ],
                 const SizedBox(height: 12),
                 Expanded(

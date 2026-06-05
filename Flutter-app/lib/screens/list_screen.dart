@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/benchmark_settings_provider.dart';
 import '../providers/list_provider.dart';
+import '../utils/benchmark_run_helper.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
 
@@ -12,7 +13,34 @@ class ListScreen extends StatelessWidget {
   Future<void> _runBenchmark(BuildContext context) async {
     final settings = context.read<BenchmarkSettingsProvider>();
     final provider = context.read<ListProvider>();
-    await provider.runMultiple(settings.renderingTargetRuns);
+    final targetRuns = settings.renderingTargetRuns;
+
+    await provider.runMultiple(targetRuns);
+
+    if (!context.mounted) return;
+
+    await handleBenchmarkFinished(
+      context,
+      scenarioKey: 'rendering',
+      scenarioTitle: 'Rendering Daftar',
+      completedRuns: provider.runCount,
+      targetRuns: targetRuns,
+      lastExecutionMs: provider.executionTimeMs,
+      results: provider.results,
+      resetProvider: provider.reset,
+      runAgain: () => _runBenchmark(context),
+    );
+  }
+
+  Future<void> _resetRuns(BuildContext context) async {
+    final provider = context.read<ListProvider>();
+    await resetScenarioRuns(
+      context,
+      scenarioKey: 'rendering',
+      scenarioTitle: 'Rendering Daftar',
+      currentRunCount: provider.runCount,
+      resetProvider: provider.reset,
+    );
   }
 
   @override
@@ -20,6 +48,13 @@ class ListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Skenario Rendering Daftar'),
+        actions: [
+          IconButton(
+            tooltip: 'Reset run ke 0',
+            onPressed: () => _resetRuns(context),
+            icon: const Icon(Icons.restart_alt),
+          ),
+        ],
       ),
       body: Consumer2<ListProvider, BenchmarkSettingsProvider>(
         builder: (context, provider, settings, _) {
@@ -40,6 +75,13 @@ class ListScreen extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                BenchmarkRunProgressCard(
+                  isLoading: provider.isLoading,
+                  progressRun: provider.progressRun,
+                  runCount: provider.runCount,
+                  targetRuns: targetRuns,
                 ),
                 const SizedBox(height: 12),
                 Card(
@@ -76,9 +118,13 @@ class ListScreen extends StatelessWidget {
                       : () => _runBenchmark(context),
                   child: Text('Generate & Render ($targetRuns x)'),
                 ),
-                if (provider.isLoading) ...[
-                  const SizedBox(height: 12),
-                  const LinearProgressIndicator(),
+                if (provider.runCount > 0 && !provider.isLoading) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _resetRuns(context),
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset Run ke 0'),
+                  ),
                 ],
                 const SizedBox(height: 12),
                 Expanded(

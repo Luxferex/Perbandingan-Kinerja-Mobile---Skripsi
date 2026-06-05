@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/benchmark_settings_provider.dart';
 import '../providers/database_provider.dart';
+import '../utils/benchmark_run_helper.dart';
 import '../utils/benchmark_utils.dart';
 import '../utils/clipboard_helper.dart';
 
@@ -110,15 +111,35 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
     if (!confirmed || !context.mounted) return;
 
     final settings = context.read<BenchmarkSettingsProvider>();
-    await provider.runMultiple(settings.sqliteTargetRuns);
+    final targetRuns = settings.sqliteTargetRuns;
+
+    await provider.runMultiple(targetRuns);
 
     if (!context.mounted) return;
 
-    if (provider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(provider.error!)),
-      );
-    }
+    await handleBenchmarkFinished(
+      context,
+      scenarioKey: 'sqlite',
+      scenarioTitle: 'Basis Data SQLite',
+      completedRuns: provider.runCount,
+      targetRuns: targetRuns,
+      lastExecutionMs: provider.totalTimeMs,
+      results: provider.results,
+      errorMessage: provider.error,
+      resetProvider: provider.resetRuns,
+      runAgain: () => _runBenchmark(context),
+    );
+  }
+
+  Future<void> _resetRuns(BuildContext context) async {
+    final provider = context.read<DatabaseProvider>();
+    await resetScenarioRuns(
+      context,
+      scenarioKey: 'sqlite',
+      scenarioTitle: 'Basis Data SQLite',
+      currentRunCount: provider.runCount,
+      resetProvider: provider.resetRuns,
+    );
   }
 
   @override
@@ -126,6 +147,13 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Skenario Basis Data SQLite'),
+        actions: [
+          IconButton(
+            tooltip: 'Reset run ke 0',
+            onPressed: () => _resetRuns(context),
+            icon: const Icon(Icons.restart_alt),
+          ),
+        ],
       ),
       body: Consumer2<DatabaseProvider, BenchmarkSettingsProvider>(
         builder: (context, provider, settings, _) {
@@ -145,6 +173,13 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                BenchmarkRunProgressCard(
+                  isLoading: provider.isLoading,
+                  progressRun: provider.progressRun,
+                  runCount: provider.runCount,
+                  targetRuns: targetRuns,
                 ),
                 const SizedBox(height: 12),
                 if (showResults)
@@ -174,6 +209,8 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
                                 .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(height: 4),
+                          Text('Jumlah run: ${provider.runCount}'),
                           const SizedBox(height: 8),
                           TextButton(
                             onPressed: () => copyBenchmarkResult(
@@ -208,9 +245,13 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
                       : () => _runBenchmark(context),
                   child: Text('Jalankan Benchmark ($targetRuns x)'),
                 ),
-                if (provider.isLoading) ...[
-                  const SizedBox(height: 12),
-                  const LinearProgressIndicator(),
+                if (provider.runCount > 0 && !provider.isLoading) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _resetRuns(context),
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset Run ke 0'),
+                  ),
                 ],
                 const SizedBox(height: 12),
                 OutlinedButton(

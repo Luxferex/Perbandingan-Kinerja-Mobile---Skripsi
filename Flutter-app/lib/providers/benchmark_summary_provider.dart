@@ -18,6 +18,11 @@ class BenchmarkSummaryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearScenario(String scenario) {
+    _allResults.removeWhere((result) => result.scenario == scenario);
+    notifyListeners();
+  }
+
   String getCsvExport() => buildBenchmarkCsvExport(_allResults);
 
   List<BenchmarkResult> _resultsForScenario(String scenario) {

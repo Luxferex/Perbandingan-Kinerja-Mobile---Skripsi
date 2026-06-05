@@ -23,6 +23,7 @@ class DatabaseProvider extends ChangeNotifier {
   int _selectedCount = 0;
   String? _error;
   int _runCount = 0;
+  int _progressRun = 0;
   bool _isDatabaseInitialized = false;
   final List<BenchmarkResult> _results = [];
 
@@ -41,6 +42,7 @@ class DatabaseProvider extends ChangeNotifier {
   int get selectedCount => _selectedCount;
   String? get error => _error;
   int get runCount => _runCount;
+  int get progressRun => _progressRun;
   List<BenchmarkResult> get results => List.unmodifiable(_results);
   bool get isDatabaseInitialized => _isDatabaseInitialized;
 
@@ -77,11 +79,15 @@ class DatabaseProvider extends ChangeNotifier {
 
   Future<void> runMultiple(int count) async {
     for (var i = 0; i < count; i++) {
+      _progressRun = i + 1;
+      notifyListeners();
       await runFullBenchmark();
       if (i < count - 1) {
         await Future.delayed(const Duration(milliseconds: 500));
       }
     }
+    _progressRun = 0;
+    notifyListeners();
   }
 
   Future<double> _runTimedOperation(Future<void> Function() operation) async {
@@ -186,9 +192,7 @@ class DatabaseProvider extends ChangeNotifier {
     }
   }
 
-  void reset() {
-    _isLoading = false;
-    _currentOperation = 'idle';
+  void resetRuns() {
     _insertTimeMs = 0;
     _selectTimeMs = 0;
     _updateTimeMs = 0;
@@ -197,8 +201,16 @@ class DatabaseProvider extends ChangeNotifier {
     _selectedCount = 0;
     _error = null;
     _runCount = 0;
-    _isDatabaseInitialized = false;
+    _progressRun = 0;
     _results.clear();
+    notifyListeners();
+  }
+
+  void reset() {
+    _isLoading = false;
+    _currentOperation = 'idle';
+    resetRuns();
+    _isDatabaseInitialized = false;
     notifyListeners();
   }
 }
