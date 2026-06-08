@@ -22,7 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(
+                INSTANCE ?: Room.databaseBuilder(   
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME

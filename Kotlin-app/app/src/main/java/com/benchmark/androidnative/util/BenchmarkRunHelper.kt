@@ -135,7 +135,6 @@ object BenchmarkRunHelper {
         if (!confirmed || activity.isFinishing) return
 
         resetAction()
-        viewModel.clearScenario(scenarioKey)
 
         Snackbar.make(
             binding.root,

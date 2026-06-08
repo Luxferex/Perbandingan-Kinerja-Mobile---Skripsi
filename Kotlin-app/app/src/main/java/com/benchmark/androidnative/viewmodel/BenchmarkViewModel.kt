@@ -108,6 +108,15 @@ class BenchmarkViewModel(
 
     fun clearScenario(scenario: String) {
         _allResults.value = _allResults.value.orEmpty().filter { it.scenario != scenario }
+        renumberResultsGlobally()
+    }
+
+    private fun renumberResultsGlobally() {
+        val renumbered = _allResults.value.orEmpty().mapIndexed { index, result ->
+            result.copy(run = index + 1)
+        }
+        _allResults.value = renumbered
+        nextRunNumber = renumbered.size + 1
     }
 
     fun resultsForScenario(scenario: String): List<BenchmarkResult> =
