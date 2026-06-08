@@ -14,11 +14,13 @@ import com.benchmark.androidnative.BenchmarkApplication
 import com.benchmark.androidnative.R
 import com.benchmark.androidnative.databinding.ActivitySummaryBinding
 import com.benchmark.androidnative.model.BenchmarkResult
+import com.benchmark.androidnative.util.BenchmarkUtils
 import com.benchmark.androidnative.util.CsvExportHelper
 import com.benchmark.androidnative.viewmodel.BenchmarkViewModel
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.snackbar.Snackbar
+import java.util.Locale
 
 class SummaryActivity : AppCompatActivity() {
 
@@ -113,16 +115,28 @@ class SummaryActivity : AppCompatActivity() {
                 TableRow(this@SummaryActivity).apply {
                     addView(headerCell(getString(R.string.table_run)))
                     addView(headerCell(getString(R.string.table_time)))
+                    addView(headerCell("CPU %"))
+                    addView(headerCell("Mem MB"))
                 },
             )
 
-            results.forEachIndexed { index, result ->
+            results.forEach { result ->
                 addView(
                     TableRow(this@SummaryActivity).apply {
-                        addView(dataCell("${index + 1}"))
+                        addView(dataCell("${result.run}"))
                         addView(
                             dataCell(
-                                String.format("%.2f", result.executionTimeMs),
+                                String.format(Locale.US, "%.2f", result.executionTimeMs),
+                            ),
+                        )
+                        addView(
+                            dataCell(
+                                String.format(Locale.US, "%.1f", result.cpuPercent),
+                            ),
+                        )
+                        addView(
+                            dataCell(
+                                String.format(Locale.US, "%.1f", result.memoryMb),
                             ),
                         )
                     },

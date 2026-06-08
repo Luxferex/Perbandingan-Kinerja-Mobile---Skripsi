@@ -6,16 +6,19 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.benchmark.androidnative.BenchmarkApplication
 import com.benchmark.androidnative.R
 import com.benchmark.androidnative.databinding.ActivityScenarioBinding
 import com.benchmark.androidnative.ui.adapter.PostListAdapter
+import com.benchmark.androidnative.util.BenchmarkRunHelper
 import com.benchmark.androidnative.util.BenchmarkUtils
 import com.benchmark.androidnative.viewmodel.BenchmarkViewModel
 import com.benchmark.androidnative.viewmodel.HttpUiState
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.launch
 
 class HttpActivity : AppCompatActivity() {
 
@@ -39,6 +42,15 @@ class HttpActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
+        binding.toolbar.inflateMenu(R.menu.menu_scenario)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_reset_runs) {
+                resetRuns()
+                true
+            } else {
+                false
+            }
+        }
 
         binding.tvDescription.text = getString(R.string.http_card_desc)
         binding.rvList.visibility = View.VISIBLE
@@ -52,6 +64,7 @@ class HttpActivity : AppCompatActivity() {
         viewModel.httpTargetRuns.observe(this) { target ->
             binding.btnRun.text = getString(R.string.run_http, target)
             tvTargetRuns.text = getString(R.string.target_runs, target)
+            updateProgressFromState(viewModel.httpState.value, target)
         }
 
         viewModel.httpState.observe(this) { state ->
@@ -59,8 +72,11 @@ class HttpActivity : AppCompatActivity() {
         }
 
         binding.btnRun.setOnClickListener {
-            val count = viewModel.targetRunsFor("http")
-            viewModel.runHttpMultiple(count)
+            lifecycleScope.launch { runBenchmark() }
+        }
+
+        binding.btnResetRuns.setOnClickListener {
+            resetRuns()
         }
     }
 
@@ -92,6 +108,7 @@ class HttpActivity : AppCompatActivity() {
     }
 
     private fun updateUi(state: HttpUiState) {
+        val target = viewModel.targetRunsFor("http")
         val executionMs = if (state.runCount > 0) state.executionTimeMs else 0.0
         tvExecutionTime.text = getString(
             R.string.execution_time,
@@ -104,10 +121,60 @@ class HttpActivity : AppCompatActivity() {
 
         binding.btnRun.isEnabled = !state.isLoading
         binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
+        binding.btnResetRuns.visibility =
+            if (state.runCount > 0 && !state.isLoading) View.VISIBLE else View.GONE
 
         btnCopy.visibility = if (state.runCount > 0) View.VISIBLE else View.GONE
 
+        updateProgressFromState(state, target)
         postAdapter.submitList(state.posts)
+    }
+
+    private fun updateProgressFromState(state: HttpUiState?, target: Int) {
+        val current = state ?: HttpUiState()
+        BenchmarkRunHelper.updateProgressCard(
+            binding = binding,
+            isLoading = current.isLoading,
+            progressRun = current.progressRun,
+            runCount = current.runCount,
+            targetRuns = target,
+        )
+    }
+
+    private suspend fun runBenchmark() {
+        val target = viewModel.targetRunsFor("http")
+        viewModel.runHttpMultiple(target)
+
+        val state = viewModel.httpState.value ?: HttpUiState()
+        BenchmarkRunHelper.handleBenchmarkFinished(
+            activity = this@HttpActivity,
+            binding = binding,
+            viewModel = viewModel,
+            scenarioKey = "http",
+            scenarioTitle = getString(R.string.scenario_http_summary),
+            completedRuns = state.runCount,
+            targetRuns = target,
+            lastExecutionMs = state.executionTimeMs,
+            results = viewModel.resultsForScenario("http"),
+            errorMessage = state.error,
+            resetAction = { viewModel.resetHttpRuns() },
+            runAgain = { runBenchmark() },
+        )
+    }
+
+    private fun resetRuns() {
+        lifecycleScope.launch {
+            val state = viewModel.httpState.value ?: HttpUiState()
+            BenchmarkRunHelper.resetScenarioRuns(
+                activity = this@HttpActivity,
+                binding = binding,
+                scenarioKey = "http",
+                scenarioTitle = getString(R.string.scenario_http_summary),
+                currentRunCount = state.runCount,
+                viewModel = viewModel,
+                resetAction = { viewModel.resetHttpRuns() },
+            )
+        }
     }
 
     private fun copyResult() {

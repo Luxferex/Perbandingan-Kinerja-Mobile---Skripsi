@@ -1,6 +1,7 @@
 package com.benchmark.androidnative.viewmodel
 
 import android.app.Application
+import android.os.Debug
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -9,6 +10,7 @@ import com.benchmark.androidnative.model.BenchmarkResult
 import com.benchmark.androidnative.model.PostItem
 import com.benchmark.androidnative.repository.BenchmarkRepository
 import com.benchmark.androidnative.util.BenchmarkUtils
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ data class HttpUiState(
     val isLoading: Boolean = false,
     val executionTimeMs: Double = 0.0,
     val runCount: Int = 0,
+    val progressRun: Int = 0,
     val error: String? = null,
     val isWarmedUp: Boolean = false,
 )
@@ -30,6 +33,8 @@ data class ListUiState(
     val isLoading: Boolean = false,
     val executionTimeMs: Double = 0.0,
     val runCount: Int = 0,
+    val progressRun: Int = 0,
+    val pendingMeasurement: Boolean = false,
 )
 
 data class DatabaseUiState(
@@ -43,6 +48,7 @@ data class DatabaseUiState(
     val selectedCount: Int = 0,
     val error: String? = null,
     val runCount: Int = 0,
+    val progressRun: Int = 0,
     val isDatabaseInitialized: Boolean = false,
 )
 
@@ -54,6 +60,9 @@ class BenchmarkViewModel(
     private val _httpTargetRuns = MutableLiveData(50)
     private val _renderingTargetRuns = MutableLiveData(30)
     private val _sqliteTargetRuns = MutableLiveData(30)
+
+    private var nextRunNumber = 1
+    private var listMeasurementDeferred: CompletableDeferred<Unit>? = null
 
     private val _allResults = MutableLiveData<List<BenchmarkResult>>(emptyList())
     private val _httpState = MutableLiveData(HttpUiState())
@@ -93,12 +102,52 @@ class BenchmarkViewModel(
     }
 
     fun clearAllResults() {
+        nextRunNumber = 1
         _allResults.value = emptyList()
+    }
+
+    fun clearScenario(scenario: String) {
+        _allResults.value = _allResults.value.orEmpty().filter { it.scenario != scenario }
+    }
+
+    fun resultsForScenario(scenario: String): List<BenchmarkResult> =
+        _allResults.value.orEmpty().filter { it.scenario == scenario }
+
+    fun resetHttpRuns() {
+        clearScenario("http")
+        val warmedUp = _httpState.value?.isWarmedUp ?: false
+        _httpState.value = HttpUiState(isWarmedUp = warmedUp)
+    }
+
+    fun resetListRuns() {
+        clearScenario("rendering")
+        _listState.value = ListUiState()
+    }
+
+    fun resetDatabaseRuns() {
+        clearScenario("sqlite")
+        val initialized = _databaseState.value?.isDatabaseInitialized ?: false
+        _databaseState.value = DatabaseUiState(isDatabaseInitialized = initialized)
     }
 
     fun getCsvExport(): String = BenchmarkUtils.buildCsvExport(_allResults.value.orEmpty())
 
-    private fun recordResult(result: BenchmarkResult) {
+    private fun recordResult(
+        scenario: String,
+        executionTimeMs: Double,
+        cpuPercent: Double,
+        memoryMb: Double,
+        timestamp: Date = Date(),
+    ) {
+        val result = BenchmarkResult(
+            run = nextRunNumber++,
+            framework = "kotlin",
+            scenario = scenario,
+            executionTimeMs = executionTimeMs,
+            cpuPercent = cpuPercent,
+            memoryMb = memoryMb,
+            timestamp = timestamp,
+        )
         _allResults.postValue(_allResults.value.orEmpty() + result)
     }
 
@@ -116,35 +165,44 @@ class BenchmarkViewModel(
         }
     }
 
-    fun runHttpMultiple(count: Int) {
-        viewModelScope.launch {
-            for (i in 0 until count) {
-                fetchAndMeasureHttp()
-                if (i < count - 1) {
-                    delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
-                }
+    suspend fun runHttpMultiple(count: Int) {
+        for (i in 0 until count) {
+            val current = _httpState.value ?: HttpUiState()
+            _httpState.value = current.copy(progressRun = i + 1)
+            fetchAndMeasureHttp()
+            if (i < count - 1) {
+                delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
             }
         }
+        val finished = _httpState.value ?: HttpUiState()
+        _httpState.value = finished.copy(progressRun = 0)
     }
 
     private suspend fun fetchAndMeasureHttp() {
         val current = _httpState.value ?: HttpUiState()
         _httpState.value = current.copy(isLoading = true, error = null)
 
-        val start = System.nanoTime() / 1000
+        val cpuBefore = Debug.threadCpuTimeNanos()
+        val startTime = System.nanoTime()
         try {
             val posts = withContext(Dispatchers.IO) {
                 repository.fetchPostsFromApi()
             }
-            val end = System.nanoTime() / 1000
-            val executionMs = BenchmarkUtils.elapsedMs(start, end)
+            val endTime = System.nanoTime()
+            val cpuAfter = Debug.threadCpuTimeNanos()
+            val (executionMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
+                startTime,
+                endTime,
+                cpuBefore,
+                cpuAfter,
+            )
             val newRunCount = current.runCount + 1
-            val result = BenchmarkResult(
+            recordResult(
                 scenario = "http",
                 executionTimeMs = executionMs,
-                timestamp = Date(),
+                cpuPercent = cpuPercent,
+                memoryMb = memoryMb,
             )
-            recordResult(result)
             _httpState.value = current.copy(
                 posts = posts,
                 isLoading = false,
@@ -164,34 +222,38 @@ class BenchmarkViewModel(
     fun httpLastResultCopyText(): String? {
         val state = _httpState.value ?: return null
         if (state.runCount == 0) return null
+        val last = _allResults.value.orEmpty().lastOrNull { it.scenario == "http" } ?: return null
         return BenchmarkUtils.formatResultLogLine(
             scenarioLabel = "HTTP",
-            runNumber = state.runCount,
-            executionTimeMs = state.executionTimeMs,
-            timestamp = Date(),
+            runNumber = last.run,
+            executionTimeMs = last.executionTimeMs,
+            cpuPercent = last.cpuPercent,
+            memoryMb = last.memoryMb,
+            timestamp = last.timestamp,
         )
     }
 
-    fun runListMultiple(count: Int) {
-        viewModelScope.launch {
-            val current = _listState.value ?: ListUiState()
-            _listState.value = current.copy(isLoading = true)
-            try {
-                for (i in 0 until count) {
-                    generateAndMeasureList()
-                    if (i < count - 1) {
-                        delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
-                    }
+    suspend fun runListMultiple(count: Int) {
+        val current = _listState.value ?: ListUiState()
+        _listState.value = current.copy(isLoading = true)
+        try {
+            for (i in 0 until count) {
+                _listState.value = (_listState.value ?: ListUiState()).copy(progressRun = i + 1)
+                prepareAndAwaitListRender()
+                if (i < count - 1) {
+                    delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
                 }
-            } finally {
-                _listState.value = _listState.value?.copy(isLoading = false)
             }
+        } finally {
+            _listState.value = _listState.value?.copy(isLoading = false, progressRun = 0)
         }
     }
 
-    private fun generateAndMeasureList() {
+    private suspend fun prepareAndAwaitListRender() {
         val current = _listState.value ?: ListUiState()
-        val start = System.nanoTime() / 1000
+        val deferred = CompletableDeferred<Unit>()
+        listMeasurementDeferred = deferred
+
         val entities = BenchmarkUtils.generateDummyPosts(BenchmarkUtils.BENCHMARK_ITEM_COUNT)
         val items = entities.map { entity ->
             PostItem(
@@ -201,32 +263,47 @@ class BenchmarkViewModel(
                 body = entity.body,
             )
         }
-        val end = System.nanoTime() / 1000
-        val executionMs = BenchmarkUtils.elapsedMs(start, end)
-        val newRunCount = current.runCount + 1
-        recordResult(
-            BenchmarkResult(
-                scenario = "rendering",
-                executionTimeMs = executionMs,
-                timestamp = Date(),
-            ),
-        )
+
         _listState.value = current.copy(
             items = items,
             isGenerated = true,
-            executionTimeMs = executionMs,
-            runCount = newRunCount,
+            pendingMeasurement = true,
         )
+        deferred.await()
+    }
+
+    fun completeListRenderMeasurement(
+        executionTimeMs: Double,
+        cpuPercent: Double,
+        memoryMb: Double,
+    ) {
+        val current = _listState.value ?: return
+        val newRunCount = current.runCount + 1
+        recordResult(
+            scenario = "rendering",
+            executionTimeMs = executionTimeMs,
+            cpuPercent = cpuPercent,
+            memoryMb = memoryMb,
+        )
+        _listState.value = current.copy(
+            executionTimeMs = executionTimeMs,
+            runCount = newRunCount,
+            pendingMeasurement = false,
+        )
+        listMeasurementDeferred?.complete(Unit)
     }
 
     fun listLastResultCopyText(): String? {
         val state = _listState.value ?: return null
         if (state.runCount == 0) return null
+        val last = _allResults.value.orEmpty().lastOrNull { it.scenario == "rendering" } ?: return null
         return BenchmarkUtils.formatResultLogLine(
             scenarioLabel = "Rendering",
-            runNumber = state.runCount,
-            executionTimeMs = state.executionTimeMs,
-            timestamp = Date(),
+            runNumber = last.run,
+            executionTimeMs = last.executionTimeMs,
+            cpuPercent = last.cpuPercent,
+            memoryMb = last.memoryMb,
+            timestamp = last.timestamp,
         )
     }
 
@@ -251,15 +328,17 @@ class BenchmarkViewModel(
         }
     }
 
-    fun runSqliteMultiple(count: Int) {
-        viewModelScope.launch {
-            for (i in 0 until count) {
-                runFullSqliteBenchmark()
-                if (i < count - 1) {
-                    delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
-                }
+    suspend fun runSqliteMultiple(count: Int) {
+        for (i in 0 until count) {
+            val current = _databaseState.value ?: DatabaseUiState()
+            postDatabaseState(current.copy(progressRun = i + 1))
+            runFullSqliteBenchmark()
+            if (i < count - 1) {
+                delay(BenchmarkUtils.INTER_RUN_DELAY_MS)
             }
         }
+        val finished = _databaseState.value ?: DatabaseUiState()
+        postDatabaseState(finished.copy(progressRun = 0))
     }
 
     private suspend fun runFullSqliteBenchmark() {
@@ -279,6 +358,9 @@ class BenchmarkViewModel(
 
         try {
             withContext(Dispatchers.IO) {
+                val cpuBefore = Debug.threadCpuTimeNanos()
+                val startTime = System.nanoTime()
+
                 state = state.copy(currentOperation = "clearing", isDatabaseInitialized = true)
                 postDatabaseState(state)
                 repository.clearDatabase()
@@ -319,14 +401,21 @@ class BenchmarkViewModel(
                 val deleteEnd = System.nanoTime() / 1000
                 val deleteMs = BenchmarkUtils.elapsedMs(deleteStart, deleteEnd)
 
-                val totalMs = insertMs + selectMs + updateMs + deleteMs
+                val endTime = System.nanoTime()
+                val cpuAfter = Debug.threadCpuTimeNanos()
+                val (totalMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
+                    startTime,
+                    endTime,
+                    cpuBefore,
+                    cpuAfter,
+                )
+
                 val newRunCount = state.runCount + 1
                 recordResult(
-                    BenchmarkResult(
-                        scenario = "sqlite",
-                        executionTimeMs = totalMs,
-                        timestamp = Date(),
-                    ),
+                    scenario = "sqlite",
+                    executionTimeMs = totalMs,
+                    cpuPercent = cpuPercent,
+                    memoryMb = memoryMb,
                 )
                 state = state.copy(
                     isLoading = false,
@@ -362,11 +451,14 @@ class BenchmarkViewModel(
     fun databaseLastResultCopyText(): String? {
         val state = _databaseState.value ?: return null
         if (state.runCount == 0) return null
+        val last = _allResults.value.orEmpty().lastOrNull { it.scenario == "sqlite" } ?: return null
         return BenchmarkUtils.formatResultLogLine(
             scenarioLabel = "SQLite",
-            runNumber = state.runCount,
-            executionTimeMs = state.totalTimeMs,
-            timestamp = Date(),
+            runNumber = last.run,
+            executionTimeMs = last.executionTimeMs,
+            cpuPercent = last.cpuPercent,
+            memoryMb = last.memoryMb,
+            timestamp = last.timestamp,
         )
     }
 

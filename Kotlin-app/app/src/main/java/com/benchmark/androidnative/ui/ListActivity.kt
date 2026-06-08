@@ -3,19 +3,25 @@ package com.benchmark.androidnative.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
+import android.os.Debug
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.benchmark.androidnative.BenchmarkApplication
 import com.benchmark.androidnative.R
 import com.benchmark.androidnative.databinding.ActivityScenarioBinding
+import com.benchmark.androidnative.model.PostItem
 import com.benchmark.androidnative.ui.adapter.PostListAdapter
+import com.benchmark.androidnative.util.BenchmarkRunHelper
 import com.benchmark.androidnative.util.BenchmarkUtils
 import com.benchmark.androidnative.viewmodel.BenchmarkViewModel
 import com.benchmark.androidnative.viewmodel.ListUiState
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.launch
 
 class ListActivity : AppCompatActivity() {
 
@@ -27,6 +33,7 @@ class ListActivity : AppCompatActivity() {
     private lateinit var tvGenerateTime: TextView
     private lateinit var tvRunCount: TextView
     private lateinit var btnCopy: MaterialButton
+    private var isMeasuringRender = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +46,15 @@ class ListActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
+        binding.toolbar.inflateMenu(R.menu.menu_scenario)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_reset_runs) {
+                resetRuns()
+                true
+            } else {
+                false
+            }
+        }
 
         binding.tvDescription.text = getString(R.string.list_card_desc)
         binding.rvList.visibility = View.VISIBLE
@@ -50,6 +66,7 @@ class ListActivity : AppCompatActivity() {
         viewModel.renderingTargetRuns.observe(this) { target ->
             binding.btnRun.text = getString(R.string.run_list, target)
             tvTargetRuns.text = getString(R.string.target_runs, target)
+            updateProgressFromState(viewModel.listState.value, target)
         }
 
         viewModel.listState.observe(this) { state ->
@@ -57,8 +74,11 @@ class ListActivity : AppCompatActivity() {
         }
 
         binding.btnRun.setOnClickListener {
-            val count = viewModel.targetRunsFor("rendering")
-            viewModel.runListMultiple(count)
+            lifecycleScope.launch { runBenchmark() }
+        }
+
+        binding.btnResetRuns.setOnClickListener {
+            resetRuns()
         }
     }
 
@@ -90,6 +110,7 @@ class ListActivity : AppCompatActivity() {
     }
 
     private fun updateUi(state: ListUiState) {
+        val target = viewModel.targetRunsFor("rendering")
         val generateMs = if (state.isGenerated) state.executionTimeMs else 0.0
         tvGenerateTime.text = getString(
             R.string.generate_time,
@@ -99,10 +120,96 @@ class ListActivity : AppCompatActivity() {
 
         binding.btnRun.isEnabled = !state.isLoading
         binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
+        binding.btnResetRuns.visibility =
+            if (state.runCount > 0 && !state.isLoading) View.VISIBLE else View.GONE
 
         btnCopy.visibility = if (state.runCount > 0) View.VISIBLE else View.GONE
 
-        postAdapter.submitList(state.items)
+        updateProgressFromState(state, target)
+
+        if (state.pendingMeasurement && !isMeasuringRender) {
+            measureListRender(state.items)
+        } else if (!state.pendingMeasurement) {
+            postAdapter.submitList(state.items)
+        }
+    }
+
+    private fun updateProgressFromState(state: ListUiState?, target: Int) {
+        val current = state ?: ListUiState()
+        BenchmarkRunHelper.updateProgressCard(
+            binding = binding,
+            isLoading = current.isLoading,
+            progressRun = current.progressRun,
+            runCount = current.runCount,
+            targetRuns = target,
+        )
+    }
+
+    private fun measureListRender(items: List<PostItem>) {
+        isMeasuringRender = true
+        val cpuBefore = Debug.threadCpuTimeNanos()
+        val startTime = System.nanoTime()
+
+        binding.rvList.viewTreeObserver.addOnGlobalLayoutListener(
+            object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    binding.rvList.viewTreeObserver.removeOnGlobalLayoutListener(this)
+
+                    val endTime = System.nanoTime()
+                    val cpuAfter = Debug.threadCpuTimeNanos()
+                    val (wallTimeMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
+                        startTime,
+                        endTime,
+                        cpuBefore,
+                        cpuAfter,
+                    )
+
+                    isMeasuringRender = false
+                    viewModel.completeListRenderMeasurement(
+                        executionTimeMs = wallTimeMs,
+                        cpuPercent = cpuPercent,
+                        memoryMb = memoryMb,
+                    )
+                }
+            },
+        )
+        postAdapter.submitList(items)
+    }
+
+    private suspend fun runBenchmark() {
+        val target = viewModel.targetRunsFor("rendering")
+        viewModel.runListMultiple(target)
+
+        val state = viewModel.listState.value ?: ListUiState()
+        BenchmarkRunHelper.handleBenchmarkFinished(
+            activity = this@ListActivity,
+            binding = binding,
+            viewModel = viewModel,
+            scenarioKey = "rendering",
+            scenarioTitle = getString(R.string.scenario_rendering_summary),
+            completedRuns = state.runCount,
+            targetRuns = target,
+            lastExecutionMs = state.executionTimeMs,
+            results = viewModel.resultsForScenario("rendering"),
+            errorMessage = null,
+            resetAction = { viewModel.resetListRuns() },
+            runAgain = { runBenchmark() },
+        )
+    }
+
+    private fun resetRuns() {
+        lifecycleScope.launch {
+            val state = viewModel.listState.value ?: ListUiState()
+            BenchmarkRunHelper.resetScenarioRuns(
+                activity = this@ListActivity,
+                binding = binding,
+                scenarioKey = "rendering",
+                scenarioTitle = getString(R.string.scenario_rendering_summary),
+                currentRunCount = state.runCount,
+                viewModel = viewModel,
+                resetAction = { viewModel.resetListRuns() },
+            )
+        }
     }
 
     private fun copyResult() {

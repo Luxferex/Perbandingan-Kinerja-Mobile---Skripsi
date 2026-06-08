@@ -76,4 +76,25 @@
     <string name="table_time">Waktu (ms)</string>
     <string name="decrease">Kurangi</string>
     <string name="increase">Tambah</string>
+    <string name="progress_running">Sedang berjalan: run %1$d / %2$d</string>
+    <string name="progress_finished">Selesai: %1$d / %2$d run</string>
+    <string name="progress_none">Belum ada run</string>
+    <string name="reset_run">Reset Run ke 0</string>
+    <string name="reset_run_tooltip">Reset run ke 0</string>
+    <string name="reset_confirm_title">Reset Run?</string>
+    <string name="reset_confirm_message">Run %1$s akan dikembalikan ke 0 dan %2$d hasil pengujian skenario ini dihapus dari ringkasan.\n\nLanjutkan?</string>
+    <string name="reset_action">Reset</string>
+    <string name="reset_no_runs">Belum ada run yang perlu direset.</string>
+    <string name="reset_done">Run %1$s direset ke 0.</string>
+    <string name="benchmark_progress_snackbar">%1$s selesai — %2$d/%3$d run tercatat.</string>
+    <string name="benchmark_complete_title">Pengujian Selesai</string>
+    <string name="benchmark_failed_title">Pengujian Gagal</string>
+    <string name="benchmark_complete_summary">%1$s — %2$d/%3$d run berhasil.</string>
+    <string name="benchmark_complete_prompt">Ingin menguji lagi atau mereset run ke 0?</string>
+    <string name="stat_last_run">Run terakhir</string>
+    <string name="stat_average">Rata-rata</string>
+    <string name="stat_fastest">Tercepat</string>
+    <string name="stat_slowest">Terlambat</string>
+    <string name="run_again">Uji Lagi</string>
+    <string name="done">Selesai</string>
 </resources>

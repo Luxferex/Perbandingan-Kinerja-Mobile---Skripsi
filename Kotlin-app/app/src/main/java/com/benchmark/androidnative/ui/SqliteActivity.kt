@@ -7,14 +7,17 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.benchmark.androidnative.BenchmarkApplication
 import com.benchmark.androidnative.R
 import com.benchmark.androidnative.databinding.ActivityScenarioBinding
+import com.benchmark.androidnative.util.BenchmarkRunHelper
 import com.benchmark.androidnative.util.BenchmarkUtils
 import com.benchmark.androidnative.viewmodel.BenchmarkViewModel
 import com.benchmark.androidnative.viewmodel.DatabaseUiState
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.launch
 
 class SqliteActivity : AppCompatActivity() {
 
@@ -41,6 +44,15 @@ class SqliteActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
+        binding.toolbar.inflateMenu(R.menu.menu_scenario)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_reset_runs) {
+                resetRuns()
+                true
+            } else {
+                false
+            }
+        }
 
         binding.tvDescription.text = getString(R.string.sqlite_card_desc)
         binding.btnResetDatabase.visibility = View.VISIBLE
@@ -52,6 +64,7 @@ class SqliteActivity : AppCompatActivity() {
 
         viewModel.sqliteTargetRuns.observe(this) { target ->
             binding.btnRun.text = getString(R.string.run_sqlite, target)
+            updateProgressFromState(viewModel.databaseState.value, target)
         }
 
         viewModel.databaseState.observe(this) { state ->
@@ -60,6 +73,10 @@ class SqliteActivity : AppCompatActivity() {
 
         binding.btnRun.setOnClickListener {
             runWithConfirmation()
+        }
+
+        binding.btnResetRuns.setOnClickListener {
+            resetRuns()
         }
 
         binding.btnResetDatabase.setOnClickListener {
@@ -105,11 +122,11 @@ class SqliteActivity : AppCompatActivity() {
     }
 
     private fun updateUi(state: DatabaseUiState) {
+        val target = viewModel.targetRunsFor("sqlite")
         val showResults = state.runCount > 0 && !state.isLoading
         metricsCard.visibility = if (showResults) View.VISIBLE else View.GONE
 
         if (showResults) {
-            val target = viewModel.targetRunsFor("sqlite")
             tvTargetRuns.text = getString(R.string.target_runs, target)
             tvInsert.text = getString(
                 R.string.insert_time,
@@ -150,6 +167,21 @@ class SqliteActivity : AppCompatActivity() {
         binding.btnRun.isEnabled = !state.isLoading
         binding.btnResetDatabase.isEnabled = !state.isLoading
         binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
+        binding.btnResetRuns.visibility =
+            if (state.runCount > 0 && !state.isLoading) View.VISIBLE else View.GONE
+
+        updateProgressFromState(state, target)
+    }
+
+    private fun updateProgressFromState(state: DatabaseUiState?, target: Int) {
+        val current = state ?: DatabaseUiState()
+        BenchmarkRunHelper.updateProgressCard(
+            binding = binding,
+            isLoading = current.isLoading,
+            progressRun = current.progressRun,
+            runCount = current.runCount,
+            targetRuns = target,
+        )
     }
 
     private fun runWithConfirmation() {
@@ -169,10 +201,79 @@ class SqliteActivity : AppCompatActivity() {
             .setMessage(R.string.confirm_message)
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.continue_action) { _, _ ->
-                val count = viewModel.targetRunsFor("sqlite")
-                viewModel.runSqliteMultiple(count)
+                runBenchmark()
             }
             .show()
+    }
+
+    private fun runBenchmark() {
+        lifecycleScope.launch { executeBenchmark() }
+    }
+
+    private suspend fun executeBenchmark() {
+        val target = viewModel.targetRunsFor("sqlite")
+        viewModel.runSqliteMultiple(target)
+
+        val state = viewModel.databaseState.value ?: DatabaseUiState()
+        BenchmarkRunHelper.handleBenchmarkFinished(
+            activity = this@SqliteActivity,
+            binding = binding,
+            viewModel = viewModel,
+            scenarioKey = "sqlite",
+            scenarioTitle = getString(R.string.scenario_sqlite_summary),
+            completedRuns = state.runCount,
+            targetRuns = target,
+            lastExecutionMs = state.totalTimeMs,
+            results = viewModel.resultsForScenario("sqlite"),
+            errorMessage = state.error,
+            resetAction = { viewModel.resetDatabaseRuns() },
+            runAgain = { runWithConfirmationAndBenchmark() },
+        )
+    }
+
+    private suspend fun runWithConfirmationAndBenchmark() {
+        val state = viewModel.databaseState.value
+        if (state?.isDatabaseInitialized != true) {
+            viewModel.ensureDatabaseReady()
+            return
+        }
+
+        val confirmed = kotlinx.coroutines.suspendCancellableCoroutine<Boolean> { continuation ->
+            AlertDialog.Builder(this@SqliteActivity)
+                .setTitle(R.string.confirm_title)
+                .setMessage(R.string.confirm_message)
+                .setNegativeButton(R.string.cancel) { dialog, _ ->
+                    dialog.dismiss()
+                    continuation.resume(false) {}
+                }
+                .setPositiveButton(R.string.continue_action) { dialog, _ ->
+                    dialog.dismiss()
+                    continuation.resume(true) {}
+                }
+                .setOnCancelListener {
+                    continuation.resume(false) {}
+                }
+                .show()
+        }
+
+        if (confirmed) {
+            executeBenchmark()
+        }
+    }
+
+    private fun resetRuns() {
+        lifecycleScope.launch {
+            val state = viewModel.databaseState.value ?: DatabaseUiState()
+            BenchmarkRunHelper.resetScenarioRuns(
+                activity = this@SqliteActivity,
+                binding = binding,
+                scenarioKey = "sqlite",
+                scenarioTitle = getString(R.string.scenario_sqlite_summary),
+                currentRunCount = state.runCount,
+                viewModel = viewModel,
+                resetAction = { viewModel.resetDatabaseRuns() },
+            )
+        }
     }
 
     private fun resetDatabase() {
