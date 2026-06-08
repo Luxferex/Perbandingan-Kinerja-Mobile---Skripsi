@@ -74,6 +74,8 @@
     <string name="scenario_sqlite_summary">Basis Data SQLite</string>
     <string name="table_run">Run</string>
     <string name="table_time">Waktu (ms)</string>
+    <string name="table_cpu">CPU (%)</string>
+    <string name="table_memory">Memori (MB)</string>
     <string name="decrease">Kurangi</string>
     <string name="increase">Tambah</string>
     <string name="progress_running">Sedang berjalan: run %1$d / %2$d</string>

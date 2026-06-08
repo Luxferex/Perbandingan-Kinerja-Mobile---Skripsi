@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/benchmark_result.dart';
 import '../providers/benchmark_summary_provider.dart';
 import '../utils/csv_export_helper.dart';
 
@@ -15,6 +16,71 @@ class SummaryScreen extends StatelessWidget {
   };
 
   String _formatMs(double ms) => ms.toStringAsFixed(2);
+
+  String _formatCpu(double percent) => percent.toStringAsFixed(1);
+
+  String _formatMemory(double mb) => mb.toStringAsFixed(1);
+
+  Widget _buildResultsTable(
+    BuildContext context,
+    List<BenchmarkResult> results,
+  ) {
+    final theme = Theme.of(context);
+    final borderColor = theme.dividerColor;
+    final headerStyle = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.bold,
+    );
+    final cellStyle = theme.textTheme.bodySmall;
+
+    Widget cell(
+      String text, {
+      TextStyle? style,
+      TextAlign align = TextAlign.left,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Text(
+          text,
+          style: style,
+          textAlign: align,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    return Table(
+      border: TableBorder.all(color: borderColor),
+      columnWidths: const {
+        0: FlexColumnWidth(1),
+        1: FlexColumnWidth(2.2),
+        2: FlexColumnWidth(1.6),
+        3: FlexColumnWidth(2),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+          ),
+          children: [
+            cell('Run', style: headerStyle, align: TextAlign.center),
+            cell('Waktu (ms)', style: headerStyle),
+            cell('CPU (%)', style: headerStyle),
+            cell('Memori (MB)', style: headerStyle),
+          ],
+        ),
+        for (var i = 0; i < results.length; i++)
+          TableRow(
+            children: [
+              cell('${i + 1}', style: cellStyle, align: TextAlign.center),
+              cell(_formatMs(results[i].executionTimeMs), style: cellStyle),
+              cell(_formatCpu(results[i].cpuPercent), style: cellStyle),
+              cell(_formatMemory(results[i].memoryMb), style: cellStyle),
+            ],
+          ),
+      ],
+    );
+  }
 
   void _showExportDialog(BuildContext context, String csv) {
     showDialog<void>(
@@ -128,30 +194,7 @@ class SummaryScreen extends StatelessWidget {
                                       .titleMedium,
                                 ),
                                 const SizedBox(height: 8),
-                                DataTable(
-                                  columns: const [
-                                    DataColumn(label: Text('Run')),
-                                    DataColumn(label: Text('Waktu (ms)')),
-                                  ],
-                                  rows: [
-                                    for (var i = 0;
-                                        i < scenarioResults.length;
-                                        i++)
-                                      DataRow(
-                                        cells: [
-                                          DataCell(Text('${i + 1}')),
-                                          DataCell(
-                                            Text(
-                                              _formatMs(
-                                                scenarioResults[i]
-                                                    .executionTimeMs,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                  ],
-                                ),
+                                _buildResultsTable(context, scenarioResults),
                               ],
                             ),
                           ),

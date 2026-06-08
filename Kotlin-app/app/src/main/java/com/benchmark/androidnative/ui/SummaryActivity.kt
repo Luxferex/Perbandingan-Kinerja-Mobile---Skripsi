@@ -3,6 +3,7 @@ package com.benchmark.androidnative.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TableLayout
@@ -110,33 +111,41 @@ class SummaryActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = 24 }
+            clipChildren = true
+            clipToPadding = true
+            isStretchAllColumns = true
 
             addView(
                 TableRow(this@SummaryActivity).apply {
-                    addView(headerCell(getString(R.string.table_run)))
-                    addView(headerCell(getString(R.string.table_time)))
-                    addView(headerCell("CPU %"))
-                    addView(headerCell("Mem MB"))
+                    addView(headerCell(getString(R.string.table_run), COLUMN_WEIGHT_RUN, Gravity.CENTER))
+                    addView(headerCell(getString(R.string.table_time), COLUMN_WEIGHT_TIME))
+                    addView(headerCell(getString(R.string.table_cpu), COLUMN_WEIGHT_CPU))
+                    addView(headerCell(getString(R.string.table_memory), COLUMN_WEIGHT_MEMORY))
                 },
             )
 
             results.forEach { result ->
                 addView(
                     TableRow(this@SummaryActivity).apply {
-                        addView(dataCell("${result.run}"))
+                        addView(
+                            dataCell("${result.run}", COLUMN_WEIGHT_RUN, Gravity.CENTER),
+                        )
                         addView(
                             dataCell(
                                 String.format(Locale.US, "%.2f", result.executionTimeMs),
+                                COLUMN_WEIGHT_TIME,
                             ),
                         )
                         addView(
                             dataCell(
                                 String.format(Locale.US, "%.1f", result.cpuPercent),
+                                COLUMN_WEIGHT_CPU,
                             ),
                         )
                         addView(
                             dataCell(
                                 String.format(Locale.US, "%.1f", result.memoryMb),
+                                COLUMN_WEIGHT_MEMORY,
                             ),
                         )
                     },
@@ -145,19 +154,44 @@ class SummaryActivity : AppCompatActivity() {
         }
     }
 
-    private fun headerCell(text: String): TextView {
+    private fun headerCell(
+        text: String,
+        weight: Float,
+        gravity: Int = Gravity.START or Gravity.CENTER_VERTICAL,
+    ): TextView {
         return TextView(this).apply {
             this.text = text
-            setPadding(16, 8, 16, 8)
+            setPadding(CELL_PADDING_H, CELL_PADDING_V, CELL_PADDING_H, CELL_PADDING_V)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall)
+            setBackgroundResource(R.drawable.table_header_cell)
+            this.gravity = gravity
+            layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight)
         }
     }
 
-    private fun dataCell(text: String): TextView {
+    private fun dataCell(
+        text: String,
+        weight: Float,
+        gravity: Int = Gravity.START or Gravity.CENTER_VERTICAL,
+    ): TextView {
         return TextView(this).apply {
             this.text = text
-            setPadding(16, 8, 16, 8)
+            setPadding(CELL_PADDING_H, CELL_PADDING_V, CELL_PADDING_H, CELL_PADDING_V)
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+            setBackgroundResource(R.drawable.table_data_cell)
+            this.gravity = gravity
+            layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight)
         }
+    }
+
+    companion object {
+        private const val CELL_PADDING_H = 16
+        private const val CELL_PADDING_V = 20
+        private const val COLUMN_WEIGHT_RUN = 1f
+        private const val COLUMN_WEIGHT_TIME = 2.2f
+        private const val COLUMN_WEIGHT_CPU = 1.6f
+        private const val COLUMN_WEIGHT_MEMORY = 2f
     }
 
     private fun buildExportCard(csv: String): MaterialCardView {
