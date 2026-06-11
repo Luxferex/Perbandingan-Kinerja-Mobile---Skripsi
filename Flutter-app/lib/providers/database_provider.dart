@@ -90,13 +90,6 @@ class DatabaseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<double> _runTimedOperation(Future<void> Function() operation) async {
-    final startTime = DateTime.now().microsecondsSinceEpoch;
-    await operation();
-    final endTime = DateTime.now().microsecondsSinceEpoch;
-    return elapsedMs(startTime, endTime);
-  }
-
   Future<void> runFullBenchmark() async {
     _isLoading = true;
     _error = null;
@@ -110,48 +103,26 @@ class DatabaseProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cpuBefore = await CpuService.getCpuTimeNanos();
-
       await _databaseService.initDatabase();
       _isDatabaseInitialized = true;
 
-      _currentOperation = 'clearing';
-      notifyListeners();
       await _databaseService.clearAll();
 
       final dummyPosts = generateDummyPosts(_benchmarkItemCount);
 
-      _currentOperation = 'inserting';
-      notifyListeners();
-      _insertTimeMs = await _runTimedOperation(
-        () => _databaseService.insertBatch(dummyPosts),
-      );
-      notifyListeners();
+      final cpuBefore = await CpuService.getCpuTimeNanos();
 
-      _currentOperation = 'selecting';
-      notifyListeners();
-      final selectStart = DateTime.now().microsecondsSinceEpoch;
+      final startUs = DateTime.now().microsecondsSinceEpoch;
+
+      await _databaseService.insertBatch(dummyPosts);
       final selected = await _databaseService.selectAll();
-      final selectEnd = DateTime.now().microsecondsSinceEpoch;
-      _selectTimeMs = elapsedMs(selectStart, selectEnd);
+      await _databaseService.updateHalf();
+      await _databaseService.deleteHalf();
+
+      final endUs = DateTime.now().microsecondsSinceEpoch;
+      _totalTimeMs = (endUs - startUs) / 1000.0;
       _selectedCount = selected.length;
-      notifyListeners();
 
-      _currentOperation = 'updating';
-      notifyListeners();
-      _updateTimeMs = await _runTimedOperation(
-        () async => _databaseService.updateHalf(),
-      );
-      notifyListeners();
-
-      _currentOperation = 'deleting';
-      notifyListeners();
-      _deleteTimeMs = await _runTimedOperation(
-        () async => _databaseService.deleteHalf(),
-      );
-
-      _totalTimeMs =
-          _insertTimeMs + _selectTimeMs + _updateTimeMs + _deleteTimeMs;
       final cpuAfter = await CpuService.getCpuTimeNanos();
       final cpuPercent = CpuService.calculateCpuPercent(
         cpuAfter - cpuBefore,

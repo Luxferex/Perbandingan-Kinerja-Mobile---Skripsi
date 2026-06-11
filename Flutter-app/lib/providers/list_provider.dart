@@ -68,10 +68,12 @@ class ListProvider extends ChangeNotifier {
   }
 
   Future<void> generateAndMeasure() async {
+    final posts = generateDummyPosts(_itemCount);
+
     final cpuBefore = await CpuService.getCpuTimeNanos();
 
     final stopwatch = Stopwatch()..start();
-    _items = generateDummyPosts(_itemCount);
+    _items = posts;
 
     _isGenerated = true;
 
