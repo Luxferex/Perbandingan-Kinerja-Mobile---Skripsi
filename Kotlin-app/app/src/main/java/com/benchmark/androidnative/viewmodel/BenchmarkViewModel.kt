@@ -191,20 +191,22 @@ class BenchmarkViewModel(
         val current = _httpState.value ?: HttpUiState()
         _httpState.value = current.copy(isLoading = true, error = null)
 
-        val cpuBefore = Debug.threadCpuTimeNanos()
-        val startTime = System.nanoTime()
         try {
-            val posts = withContext(Dispatchers.IO) {
-                repository.fetchPostsFromApi()
+            val (posts, executionMs, cpuPercent) = withContext(Dispatchers.IO) {
+                val cpuBefore = Debug.threadCpuTimeNanos()
+                val startTime = System.nanoTime()
+                val result = repository.fetchPostsFromApi()
+                val endTime = System.nanoTime()
+                val cpuAfter = Debug.threadCpuTimeNanos()
+                val wallTimeMs = BenchmarkUtils.wallTimeMs(startTime, endTime)
+                val cpuPercent = BenchmarkUtils.calculateCpuPercent(
+                    cpuBefore,
+                    cpuAfter,
+                    wallTimeMs,
+                )
+                Triple(result, wallTimeMs, cpuPercent)
             }
-            val endTime = System.nanoTime()
-            val cpuAfter = Debug.threadCpuTimeNanos()
-            val (executionMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
-                startTime,
-                endTime,
-                cpuBefore,
-                cpuAfter,
-            )
+            val memoryMb = BenchmarkUtils.getMemoryRssMb()
             val newRunCount = current.runCount + 1
             recordResult(
                 scenario = "http",
@@ -367,44 +369,30 @@ class BenchmarkViewModel(
 
         try {
             withContext(Dispatchers.IO) {
-                val cpuBefore = Debug.threadCpuTimeNanos()
-                val startTime = System.nanoTime()
-
-                state = state.copy(currentOperation = "clearing", isDatabaseInitialized = true)
-                postDatabaseState(state)
                 repository.clearDatabase()
 
                 val dummyPosts = BenchmarkUtils.generateDummyPosts(
                     BenchmarkUtils.BENCHMARK_ITEM_COUNT,
                 )
 
-                state = state.copy(currentOperation = "inserting")
-                postDatabaseState(state)
+                val cpuBefore = Debug.threadCpuTimeNanos()
+                val startTime = System.nanoTime()
+
                 val insertStart = System.nanoTime() / 1000
                 repository.insertPostsToDb(dummyPosts)
                 val insertEnd = System.nanoTime() / 1000
                 val insertMs = BenchmarkUtils.elapsedMs(insertStart, insertEnd)
 
-                state = state.copy(currentOperation = "selecting", insertTimeMs = insertMs)
-                postDatabaseState(state)
                 val selectStart = System.nanoTime() / 1000
                 val selected = repository.getAllPostsFromDb()
                 val selectEnd = System.nanoTime() / 1000
                 val selectMs = BenchmarkUtils.elapsedMs(selectStart, selectEnd)
 
-                state = state.copy(
-                    currentOperation = "updating",
-                    selectTimeMs = selectMs,
-                    selectedCount = selected.size,
-                )
-                postDatabaseState(state)
                 val updateStart = System.nanoTime() / 1000
                 repository.updateHalf()
                 val updateEnd = System.nanoTime() / 1000
                 val updateMs = BenchmarkUtils.elapsedMs(updateStart, updateEnd)
 
-                state = state.copy(currentOperation = "deleting", updateTimeMs = updateMs)
-                postDatabaseState(state)
                 val deleteStart = System.nanoTime() / 1000
                 repository.deleteHalf()
                 val deleteEnd = System.nanoTime() / 1000
@@ -429,8 +417,13 @@ class BenchmarkViewModel(
                 state = state.copy(
                     isLoading = false,
                     currentOperation = "idle",
+                    isDatabaseInitialized = true,
+                    insertTimeMs = insertMs,
+                    selectTimeMs = selectMs,
+                    updateTimeMs = updateMs,
                     deleteTimeMs = deleteMs,
                     totalTimeMs = totalMs,
+                    selectedCount = selected.size,
                     runCount = newRunCount,
                 )
                 postDatabaseState(state)

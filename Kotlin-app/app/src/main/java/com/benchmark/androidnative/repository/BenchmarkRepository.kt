@@ -15,9 +15,8 @@ class BenchmarkRepository(
     private val postDao = database.postDao()
     private val apiService = retrofitClient.apiService
 
-    suspend fun fetchPostsFromApi(): List<PostItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchPostsFromApi(): List<PostItem> =
         apiService.getPosts(limit = 100)
-    }
 
     suspend fun clearDatabase() = withContext(Dispatchers.IO) {
         postDao.deleteAll()

@@ -59,6 +59,7 @@ class HttpActivity : AppCompatActivity() {
 
         setupMetricsViews()
 
+        binding.btnRun.isEnabled = false
         viewModel.warmUpHttp()
 
         viewModel.httpTargetRuns.observe(this) { target ->
@@ -119,7 +120,7 @@ class HttpActivity : AppCompatActivity() {
         binding.tvError.visibility = if (state.error != null) View.VISIBLE else View.GONE
         binding.tvError.text = state.error
 
-        binding.btnRun.isEnabled = !state.isLoading
+        binding.btnRun.isEnabled = state.isWarmedUp && !state.isLoading
         binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
         binding.btnResetRuns.visibility =
             if (state.runCount > 0 && !state.isLoading) View.VISIBLE else View.GONE
