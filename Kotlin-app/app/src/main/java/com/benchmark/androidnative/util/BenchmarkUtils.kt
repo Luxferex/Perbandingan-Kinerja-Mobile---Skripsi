@@ -1,6 +1,8 @@
 package com.benchmark.androidnative.util
 
 import android.os.Process
+import android.system.Os
+import android.system.OsConstants
 import com.benchmark.androidnative.database.PostEntity
 import com.benchmark.androidnative.model.BenchmarkResult
 import java.io.BufferedReader
@@ -24,15 +26,33 @@ object BenchmarkUtils {
     fun elapsedMs(startMicros: Long, endMicros: Long): Double =
         (endMicros - startMicros) / 1000.0
 
+    fun getProcessCpuTimeMs(): Double {
+        return try {
+            val ticksPerSecond = Os.sysconf(OsConstants._SC_CLK_TCK).toDouble()
+            BufferedReader(FileReader("/proc/self/stat")).use { reader ->
+                val line = reader.readLine() ?: return 0.0
+                val closingParen = line.lastIndexOf(')')
+                if (closingParen == -1) return 0.0
+                val fields = line.substring(closingParen + 2).split(Regex("\\s+"))
+                if (fields.size < 13) return 0.0
+                val utime = fields[11].toLongOrNull() ?: return 0.0
+                val stime = fields[12].toLongOrNull() ?: return 0.0
+                (utime + stime) * 1000.0 / ticksPerSecond
+            }
+        } catch (_: Exception) {
+            0.0
+        }
+    }
+
     fun calculateCpuPercent(
-        cpuBeforeNanos: Long,
-        cpuAfterNanos: Long,
+        cpuBeforeMs: Double,
+        cpuAfterMs: Double,
         wallTimeMs: Double,
     ): Double {
-        val cpuTimeDiffNanos = (cpuAfterNanos - cpuBeforeNanos).toDouble()
-        val cpuTimeMs = cpuTimeDiffNanos / 1_000_000.0
+        val cpuTimeDiffMs = cpuAfterMs - cpuBeforeMs
         return if (wallTimeMs > 1.0) {
-            (cpuTimeMs / wallTimeMs * 100.0).coerceIn(0.0, 100.0)
+            // Values >100% are possible on multi-core devices.
+            (cpuTimeDiffMs / wallTimeMs * 100.0).coerceAtLeast(0.0)
         } else {
             -1.0
         }
@@ -60,11 +80,11 @@ object BenchmarkUtils {
     fun collectMetrics(
         startNanos: Long,
         endNanos: Long,
-        cpuBeforeNanos: Long,
-        cpuAfterNanos: Long,
+        cpuBeforeMs: Double,
+        cpuAfterMs: Double,
     ): Triple<Double, Double, Double> {
         val wallTimeMs = wallTimeMs(startNanos, endNanos)
-        val cpuPercent = calculateCpuPercent(cpuBeforeNanos, cpuAfterNanos, wallTimeMs)
+        val cpuPercent = calculateCpuPercent(cpuBeforeMs, cpuAfterMs, wallTimeMs)
         val memoryMb = getMemoryRssMb()
         return Triple(wallTimeMs, cpuPercent, memoryMb)
     }

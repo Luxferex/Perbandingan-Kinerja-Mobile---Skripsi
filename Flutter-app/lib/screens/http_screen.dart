@@ -136,9 +136,9 @@ class _HttpScreenState extends State<HttpScreen> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: provider.isLoading
-                      ? null
-                      : () => _runBenchmark(context),
+                  onPressed: provider.isWarmedUp && !provider.isLoading
+                      ? () => _runBenchmark(context)
+                      : null,
                   child: Text('Jalankan ($targetRuns x)'),
                 ),
                 if (provider.runCount > 0 && !provider.isLoading) ...[

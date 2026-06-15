@@ -12,15 +12,25 @@ class CpuService {
     }
   }
 
+  static Future<double> getProcessCpuTimeMs() async {
+    try {
+      final ms = await _channel.invokeMethod<double>('getProcessCpuTimeMs');
+      return ms ?? 0.0;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
   static double calculateCpuPercent(
-    double cpuTimeDiffNanos,
+    double cpuBeforeMs,
+    double cpuAfterMs,
     double wallTimeMs,
   ) {
-    // Guard: jika wallTime terlalu kecil, hasil tidak reliable.
     if (wallTimeMs < 1.0) return -1.0;
-    if (cpuTimeDiffNanos <= 0) return 0.0;
-    final cpuTimeMs = cpuTimeDiffNanos / 1000000.0;
-    final percent = (cpuTimeMs / wallTimeMs) * 100.0;
-    return percent.clamp(0.0, 100.0);
+    final cpuTimeDiffMs = cpuAfterMs - cpuBeforeMs;
+    if (cpuTimeDiffMs <= 0) return 0.0;
+    final percent = (cpuTimeDiffMs / wallTimeMs) * 100.0;
+    // Values >100% are possible on multi-core devices.
+    return percent < 0.0 ? 0.0 : percent;
   }
 }

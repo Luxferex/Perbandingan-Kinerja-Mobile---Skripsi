@@ -3,7 +3,6 @@ package com.benchmark.androidnative.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
-import android.os.Debug
 import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.TextView
@@ -147,7 +146,7 @@ class ListActivity : AppCompatActivity() {
 
     private fun measureListRender(items: List<PostItem>) {
         isMeasuringRender = true
-        val cpuBefore = Debug.threadCpuTimeNanos()
+        val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
         val startTime = System.nanoTime()
 
         binding.rvList.viewTreeObserver.addOnGlobalLayoutListener(
@@ -156,7 +155,7 @@ class ListActivity : AppCompatActivity() {
                     binding.rvList.viewTreeObserver.removeOnGlobalLayoutListener(this)
 
                     val endTime = System.nanoTime()
-                    val cpuAfter = Debug.threadCpuTimeNanos()
+                    val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
                     val (wallTimeMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
                         startTime,
                         endTime,

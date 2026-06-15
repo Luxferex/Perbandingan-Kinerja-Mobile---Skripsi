@@ -110,7 +110,7 @@ class DatabaseProvider extends ChangeNotifier {
 
       final dummyPosts = generateDummyPosts(_benchmarkItemCount);
 
-      final cpuBefore = await CpuService.getCpuTimeNanos();
+      final cpuBefore = await CpuService.getProcessCpuTimeMs();
 
       final startUs = DateTime.now().microsecondsSinceEpoch;
 
@@ -123,9 +123,10 @@ class DatabaseProvider extends ChangeNotifier {
       _totalTimeMs = (endUs - startUs) / 1000.0;
       _selectedCount = selected.length;
 
-      final cpuAfter = await CpuService.getCpuTimeNanos();
+      final cpuAfter = await CpuService.getProcessCpuTimeMs();
       final cpuPercent = CpuService.calculateCpuPercent(
-        cpuAfter - cpuBefore,
+        cpuBefore,
+        cpuAfter,
         _totalTimeMs,
       );
       final memoryMb = ProcessInfo.currentRss / (1024 * 1024);

@@ -59,6 +59,7 @@ class HttpProvider extends ChangeNotifier {
       }
       await _httpService.fetchPosts();
       _isWarmedUp = true;
+      notifyListeners();
       if (kDebugMode) {
         debugPrint('[HttpProvider] Warm-up selesai');
       }
@@ -87,16 +88,17 @@ class HttpProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final cpuBefore = await CpuService.getCpuTimeNanos();
+    final cpuBefore = await CpuService.getProcessCpuTimeMs();
     final startTime = DateTime.now().microsecondsSinceEpoch;
 
     try {
       _posts = await _httpService.fetchPosts();
       final endTime = DateTime.now().microsecondsSinceEpoch;
       _executionTimeMs = elapsedMs(startTime, endTime);
-      final cpuAfter = await CpuService.getCpuTimeNanos();
+      final cpuAfter = await CpuService.getProcessCpuTimeMs();
       final cpuPercent = CpuService.calculateCpuPercent(
-        cpuAfter - cpuBefore,
+        cpuBefore,
+        cpuAfter,
         _executionTimeMs,
       );
       final memoryMb = ProcessInfo.currentRss / (1024 * 1024);

@@ -1,7 +1,6 @@
 package com.benchmark.androidnative.viewmodel
 
 import android.app.Application
-import android.os.Debug
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -193,11 +192,11 @@ class BenchmarkViewModel(
 
         try {
             val (posts, executionMs, cpuPercent) = withContext(Dispatchers.IO) {
-                val cpuBefore = Debug.threadCpuTimeNanos()
+                val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
                 val startTime = System.nanoTime()
                 val result = repository.fetchPostsFromApi()
                 val endTime = System.nanoTime()
-                val cpuAfter = Debug.threadCpuTimeNanos()
+                val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
                 val wallTimeMs = BenchmarkUtils.wallTimeMs(startTime, endTime)
                 val cpuPercent = BenchmarkUtils.calculateCpuPercent(
                     cpuBefore,
@@ -375,7 +374,7 @@ class BenchmarkViewModel(
                     BenchmarkUtils.BENCHMARK_ITEM_COUNT,
                 )
 
-                val cpuBefore = Debug.threadCpuTimeNanos()
+                val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
                 val startTime = System.nanoTime()
 
                 val insertStart = System.nanoTime() / 1000
@@ -399,7 +398,7 @@ class BenchmarkViewModel(
                 val deleteMs = BenchmarkUtils.elapsedMs(deleteStart, deleteEnd)
 
                 val endTime = System.nanoTime()
-                val cpuAfter = Debug.threadCpuTimeNanos()
+                val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
                 val (totalMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
                     startTime,
                     endTime,

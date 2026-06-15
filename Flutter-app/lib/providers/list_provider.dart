@@ -70,7 +70,7 @@ class ListProvider extends ChangeNotifier {
   Future<void> generateAndMeasure() async {
     final posts = generateDummyPosts(_itemCount);
 
-    final cpuBefore = await CpuService.getCpuTimeNanos();
+    final cpuBefore = await CpuService.getProcessCpuTimeMs();
 
     final stopwatch = Stopwatch()..start();
     _items = posts;
@@ -88,9 +88,10 @@ class ListProvider extends ChangeNotifier {
     stopwatch.stop();
     _executionTimeMs = stopwatch.elapsedMicroseconds / 1000.0;
 
-    final cpuAfter = await CpuService.getCpuTimeNanos();
+    final cpuAfter = await CpuService.getProcessCpuTimeMs();
     final cpuPercent = CpuService.calculateCpuPercent(
-      cpuAfter - cpuBefore,
+      cpuBefore,
+      cpuAfter,
       _executionTimeMs,
     );
 
