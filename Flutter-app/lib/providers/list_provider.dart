@@ -8,6 +8,7 @@ import '../models/post_model.dart';
 import '../services/cpu_service.dart';
 import '../utils/benchmark_utils.dart';
 
+/// Skenario Rendering: generate + render 1000 item ListView, ukur 3 metrik.
 class ListProvider extends ChangeNotifier {
   final void Function(BenchmarkResult)? onResultRecorded;
 
@@ -67,17 +68,20 @@ class ListProvider extends ChangeNotifier {
     }
   }
 
+  /// Satu run skenario rendering: waktu dihitung sampai frame berikutnya ter-paint.
   Future<void> generateAndMeasure() async {
     final posts = generateDummyPosts(_itemCount);
 
+    // Snapshot CPU sebelum render.
     final cpuBefore = await CpuService.getProcessCpuTimeMs();
 
+    // Wall-clock: dari assign data sampai frame selesai digambar.
     final stopwatch = Stopwatch()..start();
     _items = posts;
 
     _isGenerated = true;
 
-    // Trigger rebuild and stop timer only after the next frame is painted.
+    // Stop timer hanya setelah frame berikutnya ter-paint (bukan sekadar setState).
     final completer = Completer<void>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       completer.complete();
@@ -88,6 +92,7 @@ class ListProvider extends ChangeNotifier {
     stopwatch.stop();
     _executionTimeMs = stopwatch.elapsedMicroseconds / 1000.0;
 
+    // CPU% dari Δ utime+stime / wall-clock.
     final cpuAfter = await CpuService.getProcessCpuTimeMs();
     final cpuPercent = CpuService.calculateCpuPercent(
       cpuBefore,
@@ -95,6 +100,7 @@ class ListProvider extends ChangeNotifier {
       _executionTimeMs,
     );
 
+    // RSS proses (MB).
     final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
     _runCount++;
 

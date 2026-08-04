@@ -1,8 +1,11 @@
 import 'package:flutter/services.dart';
 
+/// Bridge ke native Android untuk metrik CPU proses.
+/// Sumber data: `/proc/self/stat` (utime + stime), setara dengan Kotlin.
 class CpuService {
   static const _channel = MethodChannel('com.skripsi/metrics');
 
+  /// Waktu CPU thread saat ini (nanodetik) via Debug.threadCpuTimeNanos().
   static Future<double> getCpuTimeNanos() async {
     try {
       final nanos = await _channel.invokeMethod<int>('getCpuTimeNanos');
@@ -12,6 +15,7 @@ class CpuService {
     }
   }
 
+  /// Akumulasi waktu CPU proses (utime+stime) dalam milidetik.
   static Future<double> getProcessCpuTimeMs() async {
     try {
       final ms = await _channel.invokeMethod<double>('getProcessCpuTimeMs');
@@ -21,6 +25,8 @@ class CpuService {
     }
   }
 
+  /// CPU% = (Δ CPU time / wall-clock time) × 100.
+  /// Nilai >100% wajar di perangkat multi-core.
   static double calculateCpuPercent(
     double cpuBeforeMs,
     double cpuAfterMs,
@@ -30,7 +36,6 @@ class CpuService {
     final cpuTimeDiffMs = cpuAfterMs - cpuBeforeMs;
     if (cpuTimeDiffMs <= 0) return 0.0;
     final percent = (cpuTimeDiffMs / wallTimeMs) * 100.0;
-    // Values >100% are possible on multi-core devices.
     return percent < 0.0 ? 0.0 : percent;
   }
 }

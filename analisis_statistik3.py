@@ -4,22 +4,25 @@ Script Analisis Statistik - Perbandingan Kinerja Flutter vs Android Native Kotli
 Metodologi: Dua sampel INDEPENDEN (Flutter dan Kotlin dijalankan terpisah)
 
 Cara pakai:
-    python analisis_statistik.py file_flutter.csv file_kotlin.csv
+    python analisis_statistik3.py "Hasil Benchmark flutter.csv" "Hasil Benchmark Kotlin.csv"
 
 Output:
     - Tabel ke terminal
-    - hasil_uji_statistik.xlsx   — alur: Shapiro → Levene → t/Welch/Mann-Whitney → Cohen's d
+    - hasil_uji_statistik.xlsx   — alur: Shapiro-Wilk -> Welch's t-test / Mann-Whitney U -> Effect size
     - statistik_deskriptif.xlsx  — mean, std, median, min, max, CV
     - charts/                    — bar chart PNG per metrik
 
-Alur uji (Bab III):
+Alur uji :
     1. Shapiro-Wilk pada MASING-MASING kelompok (Flutter & Kotlin)
-       → tentukan apakah kedua kelompok berdistribusi normal
-    2a. Jika KEDUANYA normal → Uji Levene (homogenitas varians)
-          - Levene p > 0,05  → Uji t dua sampel independen (equal variances)
-          - Levene p ≤ 0,05  → Uji t Welch (unequal variances)
-    2b. Jika SALAH SATU atau KEDUANYA tidak normal → Mann-Whitney U
-    3.  Cohen's d berbasis pooled standard deviation
+       -> tentukan apakah kedua kelompok berdistribusi normal
+    2a. Jika KEDUANYA normal -> Welch's t-test (langsung, tanpa uji Levene)
+          Welch's t-test dipilih sebagai default karena tidak mengasumsikan
+          kesamaan varians antar kelompok dan tetap valid baik varians sama
+          maupun tidak (Delacre et al., 2017).
+    2b. Jika SALAH SATU atau KEDUANYA tidak normal -> Mann-Whitney U
+    3.  Effect size disesuaikan dengan jenis uji yang dipakai:
+          - Welch's t-test      -> Hedges' g* (non-pooled standard deviation)
+          - Mann-Whitney U      -> Rank-biserial correlation (r)
 """
 
 import sys, os
@@ -56,19 +59,46 @@ SCENARIO_LABELS = {
     "sqlite":    "SQLite CRUD",
 }
 
-# ── Effect size: Cohen's d (pooled SD) ───────────────────────────────────────
-def cohens_d_pooled(x, y):
-    """Cohen's d untuk dua sampel independen, berbasis pooled standard deviation."""
-    n1, n2 = len(x), len(y)
-    s1, s2 = np.std(x, ddof=1), np.std(y, ddof=1)
-    sp = np.sqrt(((n1 - 1) * s1**2 + (n2 - 1) * s2**2) / (n1 + n2 - 2))
-    return (np.mean(x) - np.mean(y)) / sp if sp > 0 else 0.0
+# ── Effect size 1: Hedges' g* (non-pooled SD) — untuk Welch's t-test ─────────
+def hedges_g_star(x, y):
+    """
+    Hedges' g* berbasis non-pooled standard deviation.
+    Digunakan bersama Welch's t-test karena tidak mengasumsikan
+    kesamaan varians antar kelompok (Delacre et al., 2017).
 
-def interpret_effect(d):
-    a = abs(d)
+        g* = (mean1 - mean2) / s*
+        s* = sqrt( (s1^2 + s2^2) / 2 )
+    """
+    s1, s2 = np.std(x, ddof=1), np.std(y, ddof=1)
+    s_star = np.sqrt((s1**2 + s2**2) / 2)
+    return (np.mean(x) - np.mean(y)) / s_star if s_star > 0 else 0.0
+
+def interpret_hedges_g(g):
+    """Interpretasi mengikuti pedoman Cohen (1988): kecil=0.2, sedang=0.5, besar=0.8."""
+    a = abs(g)
     if a < 0.2:  return "negligible"
     if a < 0.5:  return "small"
     if a < 0.8:  return "medium"
+    return "large"
+
+# ── Effect size 2: Rank-biserial correlation — untuk Mann-Whitney U ─────────
+def rank_biserial_from_u(u_stat, n1, n2):
+    """
+    Rank-biserial correlation (r) dihitung dari statistik U Mann-Whitney.
+
+        r = 1 - (2U) / (n1 * n2)
+
+    Nilai r berkisar -1 sampai 1. Tanda menunjukkan arah perbedaan
+    (mengikuti urutan kelompok x lalu y yang dikirim ke mannwhitneyu).
+    """
+    return 1 - (2 * u_stat) / (n1 * n2)
+
+def interpret_rank_biserial(r):
+    """Interpretasi rank-biserial correlation: kecil=0.1, sedang=0.3, besar=0.5."""
+    a = abs(r)
+    if a < 0.1:  return "negligible"
+    if a < 0.3:  return "small"
+    if a < 0.5:  return "medium"
     return "large"
 
 # ── Pipeline uji statistik ───────────────────────────────────────────────────
@@ -87,49 +117,50 @@ def run_pipeline(df_flutter, df_kotlin,
                 continue
             x = flu_s[metric].astype(float).dropna().values
             y = kot_s[metric].astype(float).dropna().values
+            n1, n2 = len(x), len(y)
 
             # ── Tahap 1: Shapiro-Wilk masing-masing kelompok ──
-            _, p_sh_x = stats.shapiro(x) if len(x) >= 3 else (None, np.nan)
-            _, p_sh_y = stats.shapiro(y) if len(y) >= 3 else (None, np.nan)
+            _, p_sh_x = stats.shapiro(x) if n1 >= 3 else (None, np.nan)
+            _, p_sh_y = stats.shapiro(y) if n2 >= 3 else (None, np.nan)
             both_normal = (p_sh_x > alpha) and (p_sh_y > alpha)
 
-            # ── Tahap 2: pilih uji hipotesis ──
+            # ── Tahap 2: pilih uji hipotesis (TANPA Levene) ──
             if both_normal:
-                _, p_lev = stats.levene(x, y)
-                if p_lev > alpha:
-                    test_name = "Uji t independen"
-                    _, p_val  = stats.ttest_ind(x, y, equal_var=True)
-                else:
-                    test_name = "Uji t Welch"
-                    _, p_val  = stats.ttest_ind(x, y, equal_var=False)
-                    p_lev = p_lev   # same value, just documenting
+                test_name = "Welch's t-test"
+                _, p_val  = stats.ttest_ind(x, y, equal_var=False)
+
+                # ── Tahap 3a: Effect size Hedges' g* ──
+                effect_value = hedges_g_star(x, y)
+                effect_label = "Hedges' g*"
+                effect_size  = interpret_hedges_g(effect_value)
+
             else:
-                p_lev     = stats.levene(x, y)[1]  # still compute for info
                 test_name = "Mann-Whitney U"
-                _, p_val  = stats.mannwhitneyu(x, y, alternative="two-sided")
+                u_stat, p_val = stats.mannwhitneyu(x, y, alternative="two-sided")
+
+                # ── Tahap 3b: Effect size Rank-biserial correlation ──
+                effect_value = rank_biserial_from_u(u_stat, n1, n2)
+                effect_label = "Rank-biserial r"
+                effect_size  = interpret_rank_biserial(effect_value)
 
             sig = "Ya" if (pd.notna(p_val) and p_val < alpha) else "Tidak"
-
-            # ── Tahap 3: Cohen's d (pooled) ──
-            d      = cohens_d_pooled(x, y)
-            effect = interpret_effect(d)
 
             results.append({
                 "Skenario":             scenario,
                 "Metrik":               metric,
-                "n Flutter":            len(x),
-                "n Kotlin":             len(y),
+                "n Flutter":            n1,
+                "n Kotlin":             n2,
                 "Mean Flutter":         round(float(np.mean(x)), 3),
                 "Mean Kotlin":          round(float(np.mean(y)), 3),
                 "Shapiro p (Flutter)":  round(float(p_sh_x), 4) if not np.isnan(p_sh_x) else None,
                 "Shapiro p (Kotlin)":   round(float(p_sh_y), 4) if not np.isnan(p_sh_y) else None,
                 "Kedua Normal?":        "Ya" if both_normal else "Tidak",
-                "Levene p":             round(float(p_lev), 4),
                 "Uji yang Dipakai":     test_name,
                 "p-value":              round(float(p_val), 4) if pd.notna(p_val) else None,
                 "Signifikan?":          sig,
-                "Cohen's d (pooled)":   round(d, 3),
-                "Effect Size":          effect,
+                "Effect Size (jenis)":  effect_label,
+                "Effect Size (nilai)":  round(float(effect_value), 3),
+                "Interpretasi Efek":    effect_size,
             })
     return pd.DataFrame(results)
 
@@ -225,7 +256,7 @@ def main():
     print(f"\nDisimpan: {OUTPUT_EXCEL_DESKRIPTIF}\n")
 
     # 2. Uji inferensial
-    print("="*110 + "\nHASIL UJI STATISTIK (Shapiro → Levene → t/Welch/MWU → Cohen's d)\n" + "="*110)
+    print("="*110 + "\nHASIL UJI STATISTIK (Shapiro-Wilk -> Welch's t-test / Mann-Whitney U -> Effect Size)\n" + "="*110)
     hasil = run_pipeline(df_flu, df_kot)
     print(hasil.to_string(index=False))
     hasil.to_excel(OUTPUT_EXCEL_UJI, index=False)

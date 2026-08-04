@@ -144,6 +144,10 @@ class ListActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Skenario Rendering: ukur dari submitList sampai RecyclerView layout selesai.
+     * Metrik: wall-clock (nanoTime), CPU% (/proc/self/stat), RSS memori.
+     */
     private fun measureListRender(items: List<PostItem>) {
         isMeasuringRender = true
         val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
@@ -154,6 +158,7 @@ class ListActivity : AppCompatActivity() {
                 override fun onGlobalLayout() {
                     binding.rvList.viewTreeObserver.removeOnGlobalLayoutListener(this)
 
+                    // Layout selesai → catat wall-clock, CPU%, RSS.
                     val endTime = System.nanoTime()
                     val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
                     val (wallTimeMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(

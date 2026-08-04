@@ -8,6 +8,7 @@ import '../services/cpu_service.dart';
 import '../services/http_service.dart';
 import '../utils/benchmark_utils.dart';
 
+/// Skenario HTTP: fetch 100 post dari JSONPlaceholder + ukur 3 metrik.
 class HttpProvider extends ChangeNotifier {
   final HttpService _httpService;
   final void Function(BenchmarkResult)? onResultRecorded;
@@ -57,7 +58,8 @@ class HttpProvider extends ChangeNotifier {
       if (kDebugMode) {
         debugPrint('[HttpProvider] Warm-up request...');
       }
-      await _httpService.fetchPosts();
+      final nonce = '${DateTime.now().microsecondsSinceEpoch}_warmup';
+      await _httpService.fetchPosts(nonce: nonce);
       _isWarmedUp = true;
       notifyListeners();
       if (kDebugMode) {
@@ -83,24 +85,35 @@ class HttpProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Satu run skenario HTTP: ukur wall-clock, CPU%, dan RSS memori.
   Future<void> fetchAndMeasure() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
+    // Cache-busting nonce (unik per run) agar request benar-benar fresh.
+    final nonce = '${DateTime.now().microsecondsSinceEpoch}_${_runCount + 1}';
+
+    // Snapshot CPU sebelum operasi (dari /proc/self/stat via native).
     final cpuBefore = await CpuService.getProcessCpuTimeMs();
+    // Wall-clock start.
     final startTime = DateTime.now().microsecondsSinceEpoch;
 
     try {
-      _posts = await _httpService.fetchPosts();
+      _posts = await _httpService.fetchPosts(nonce: nonce);
+
+      // Wall-clock end → execution time (ms).
       final endTime = DateTime.now().microsecondsSinceEpoch;
       _executionTimeMs = elapsedMs(startTime, endTime);
+
+      // Δ CPU time / wall-clock → CPU%.
       final cpuAfter = await CpuService.getProcessCpuTimeMs();
       final cpuPercent = CpuService.calculateCpuPercent(
         cpuBefore,
         cpuAfter,
         _executionTimeMs,
       );
+      // RSS proses (MB) — memori fisik yang dipakai aplikasi.
       final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
       _runCount++;
 

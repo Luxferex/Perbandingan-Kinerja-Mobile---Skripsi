@@ -33,7 +33,9 @@ class HttpService {
     return e.type.name;
   }
 
-  Future<List<PostModel>> fetchPosts() async {
+  /// [nonce] digunakan untuk cache-busting per run agar request tidak
+  /// berpotensi dibaca dari cache perantara / library.
+  Future<List<PostModel>> fetchPosts({required String nonce}) async {
     const url = 'https://jsonplaceholder.typicode.com/posts';
 
     if (kDebugMode) {
@@ -43,7 +45,16 @@ class HttpService {
     try {
       final response = await _dio.get<List<dynamic>>(
         url,
-        queryParameters: {'_limit': 100},
+        queryParameters: {
+          '_limit': 100,
+          '_nonce': nonce,
+        },
+        options: Options(
+          headers: const {
+            'Cache-Control': 'no-cache, no-store, max-age=0',
+            'Pragma': 'no-cache',
+          },
+        ),
       );
 
       if (kDebugMode) {

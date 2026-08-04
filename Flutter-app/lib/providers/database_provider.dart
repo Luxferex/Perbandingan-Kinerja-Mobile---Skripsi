@@ -7,6 +7,7 @@ import '../services/cpu_service.dart';
 import '../services/database_service.dart';
 import '../utils/benchmark_utils.dart';
 
+/// Skenario SQLite: INSERT → SELECT → UPDATE → DELETE (1000 baris) + ukur 3 metrik.
 class DatabaseProvider extends ChangeNotifier {
   static const int _benchmarkItemCount = 1000;
 
@@ -90,6 +91,7 @@ class DatabaseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Satu run skenario SQLite: total wall-clock CRUD + CPU% + RSS.
   Future<void> runFullBenchmark() async {
     _isLoading = true;
     _error = null;
@@ -110,8 +112,9 @@ class DatabaseProvider extends ChangeNotifier {
 
       final dummyPosts = generateDummyPosts(_benchmarkItemCount);
 
+      // Snapshot CPU sebelum rangkaian CRUD.
       final cpuBefore = await CpuService.getProcessCpuTimeMs();
-
+      // Wall-clock start (seluruh INSERT+SELECT+UPDATE+DELETE).
       final startUs = DateTime.now().microsecondsSinceEpoch;
 
       await _databaseService.insertBatch(dummyPosts);
@@ -119,10 +122,12 @@ class DatabaseProvider extends ChangeNotifier {
       await _databaseService.updateHalf();
       await _databaseService.deleteHalf();
 
+      // Wall-clock end → total execution time (ms).
       final endUs = DateTime.now().microsecondsSinceEpoch;
       _totalTimeMs = (endUs - startUs) / 1000.0;
       _selectedCount = selected.length;
 
+      // Δ CPU / wall-clock → CPU%; RSS → memori (MB).
       final cpuAfter = await CpuService.getProcessCpuTimeMs();
       final cpuPercent = CpuService.calculateCpuPercent(
         cpuBefore,

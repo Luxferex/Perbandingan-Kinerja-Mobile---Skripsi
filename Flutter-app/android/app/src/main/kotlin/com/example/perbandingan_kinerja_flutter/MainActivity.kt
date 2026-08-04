@@ -10,6 +10,7 @@ import java.io.BufferedReader
 import java.io.FileReader
 
 class MainActivity : FlutterActivity() {
+    // MethodChannel untuk metrik CPU — setara dengan BenchmarkUtils di Kotlin-app.
     private val CHANNEL = "com.skripsi/metrics"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -28,6 +29,10 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    /**
+     * Baca utime+stime dari `/proc/self/stat`, konversi ke milidetik.
+     * Sumber CPU% Flutter — harus setara dengan Kotlin BenchmarkUtils.
+     */
     private fun getProcessCpuTimeMs(): Double {
         return try {
             val ticksPerSecond = Os.sysconf(OsConstants._SC_CLK_TCK).toDouble()

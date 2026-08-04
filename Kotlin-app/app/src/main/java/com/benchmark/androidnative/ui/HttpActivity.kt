@@ -120,8 +120,11 @@ class HttpActivity : AppCompatActivity() {
         binding.tvError.visibility = if (state.error != null) View.VISIBLE else View.GONE
         binding.tvError.text = state.error
 
+        // isWarmedUp = true setelah percobaan warm-up (sukses/gagal),
+        // supaya tombol tidak terkunci diam-diam jika jaringan gagal.
         binding.btnRun.isEnabled = state.isWarmedUp && !state.isLoading
-        binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
+        binding.progressBar.visibility =
+            if (state.isLoading || !state.isWarmedUp) View.VISIBLE else View.GONE
         binding.btnResetRuns.visibility =
             if (state.runCount > 0 && !state.isLoading) View.VISIBLE else View.GONE
 

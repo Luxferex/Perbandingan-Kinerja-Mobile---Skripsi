@@ -20,12 +20,17 @@ object BenchmarkUtils {
     fun formatMs(ms: Double): String =
         String.format(Locale.US, "%.2f ms", ms)
 
+    /** Wall-clock time (ms) dari System.nanoTime() sebelum/sesudah operasi. */
     fun wallTimeMs(startNanos: Long, endNanos: Long): Double =
         (endNanos - startNanos) / 1_000_000.0
 
     fun elapsedMs(startMicros: Long, endMicros: Long): Double =
         (endMicros - startMicros) / 1000.0
 
+    /**
+     * Akumulasi waktu CPU proses dari `/proc/self/stat` (utime + stime).
+     * Digunakan sebagai dasar hitung CPU%.
+     */
     fun getProcessCpuTimeMs(): Double {
         return try {
             val ticksPerSecond = Os.sysconf(OsConstants._SC_CLK_TCK).toDouble()
@@ -35,6 +40,7 @@ object BenchmarkUtils {
                 if (closingParen == -1) return 0.0
                 val fields = line.substring(closingParen + 2).split(Regex("\\s+"))
                 if (fields.size < 13) return 0.0
+                // Field 14 = utime, field 15 = stime (0-indexed: 11, 12 setelah nama proses).
                 val utime = fields[11].toLongOrNull() ?: return 0.0
                 val stime = fields[12].toLongOrNull() ?: return 0.0
                 (utime + stime) * 1000.0 / ticksPerSecond
@@ -44,6 +50,10 @@ object BenchmarkUtils {
         }
     }
 
+    /**
+     * CPU% = (Δ CPU time / wall-clock time) × 100.
+     * Nilai >100% wajar di perangkat multi-core (mis. 200% ≈ 2 core penuh).
+     */
     fun calculateCpuPercent(
         cpuBeforeMs: Double,
         cpuAfterMs: Double,
@@ -51,13 +61,16 @@ object BenchmarkUtils {
     ): Double {
         val cpuTimeDiffMs = cpuAfterMs - cpuBeforeMs
         return if (wallTimeMs > 1.0) {
-            // Values >100% are possible on multi-core devices.
             (cpuTimeDiffMs / wallTimeMs * 100.0).coerceAtLeast(0.0)
         } else {
             -1.0
         }
     }
 
+    /**
+     * Memori RSS (Resident Set Size) proses dari `/proc/[pid]/status` (VmRSS), dalam MB.
+     * Menunjukkan memori fisik yang sedang dipakai aplikasi.
+     */
     fun getMemoryRssMb(): Double {
         return try {
             val pid = Process.myPid()
@@ -77,6 +90,7 @@ object BenchmarkUtils {
         }
     }
 
+    /** Gabungkan 3 metrik: wall-clock (ms), CPU%, memori RSS (MB). */
     fun collectMetrics(
         startNanos: Long,
         endNanos: Long,

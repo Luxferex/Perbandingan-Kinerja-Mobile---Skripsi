@@ -165,10 +165,21 @@ class BenchmarkViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.fetchPostsFromApi()
-                _httpState.postValue(current.copy(isWarmedUp = true))
-            } catch (_: Exception) {
-                // Warm-up failure is non-fatal, same as Flutter.
+                val nonce = "${System.nanoTime()}_warmup"
+                repository.fetchPostsFromApi(nonce = nonce)
+                // Warm-up sukses → izinkan tombol Run.
+                _httpState.postValue(
+                    current.copy(isWarmedUp = true, error = null),
+                )
+            } catch (e: Exception) {
+                // Warm-up gagal: tetap buka tombol Run supaya user bisa coba lagi,
+                // tapi tampilkan error (sering SSL proxy WiFi kampus).
+                _httpState.postValue(
+                    current.copy(
+                        isWarmedUp = true,
+                        error = "Warm-up gagal: ${e.message ?: e}",
+                    ),
+                )
             }
         }
     }
@@ -186,17 +197,22 @@ class BenchmarkViewModel(
         _httpState.value = finished.copy(progressRun = 0)
     }
 
+    /** Skenario HTTP: fetch API + ukur wall-clock, CPU%, RSS. */
     private suspend fun fetchAndMeasureHttp() {
         val current = _httpState.value ?: HttpUiState()
         _httpState.value = current.copy(isLoading = true, error = null)
 
         try {
+            // Cache-busting nonce (unik per run) agar request benar-benar fresh.
+            val nonce = "${System.nanoTime()}_${current.runCount + 1}"
             val (posts, executionMs, cpuPercent) = withContext(Dispatchers.IO) {
+                // Snapshot CPU + wall-clock sebelum request.
                 val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
                 val startTime = System.nanoTime()
-                val result = repository.fetchPostsFromApi()
+                val result = repository.fetchPostsFromApi(nonce = nonce)
                 val endTime = System.nanoTime()
                 val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
+                // Execution time = wall-clock; CPU% = Δ CPU / wall-clock.
                 val wallTimeMs = BenchmarkUtils.wallTimeMs(startTime, endTime)
                 val cpuPercent = BenchmarkUtils.calculateCpuPercent(
                     cpuBefore,
@@ -205,6 +221,7 @@ class BenchmarkViewModel(
                 )
                 Triple(result, wallTimeMs, cpuPercent)
             }
+            // Memori RSS setelah operasi selesai.
             val memoryMb = BenchmarkUtils.getMemoryRssMb()
             val newRunCount = current.runCount + 1
             recordResult(
@@ -374,9 +391,11 @@ class BenchmarkViewModel(
                     BenchmarkUtils.BENCHMARK_ITEM_COUNT,
                 )
 
+                // Snapshot CPU + wall-clock sebelum rangkaian CRUD SQLite.
                 val cpuBefore = BenchmarkUtils.getProcessCpuTimeMs()
                 val startTime = System.nanoTime()
 
+                // Per-operasi (untuk tampilan UI); total tetap dari startTime→endTime.
                 val insertStart = System.nanoTime() / 1000
                 repository.insertPostsToDb(dummyPosts)
                 val insertEnd = System.nanoTime() / 1000
@@ -397,6 +416,7 @@ class BenchmarkViewModel(
                 val deleteEnd = System.nanoTime() / 1000
                 val deleteMs = BenchmarkUtils.elapsedMs(deleteStart, deleteEnd)
 
+                // 3 metrik: total wall-clock, CPU%, RSS.
                 val endTime = System.nanoTime()
                 val cpuAfter = BenchmarkUtils.getProcessCpuTimeMs()
                 val (totalMs, cpuPercent, memoryMb) = BenchmarkUtils.collectMetrics(
